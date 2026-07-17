@@ -37,7 +37,9 @@ def extract_transaction(user_input: str, adapter_path: str = None) -> dict:
         )
 
     raw_output = tokenizer.decode(
-        output_ids[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
+        output_ids[0][inputs["input_ids"].shape[1]:],
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
     )
 
     result = parse_and_validate(raw_output)
