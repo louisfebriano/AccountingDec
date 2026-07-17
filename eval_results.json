@@ -1,0 +1,52 @@
+{
+  "n_total": 2,
+  "json_validity_rate": 1.0,
+  "exact_match_accuracy": 0.5,
+  "field_accuracy": {
+    "item_name": 0.5,
+    "quantity": 1.0,
+    "unit": 0.5,
+    "total_price": 0.5,
+    "date": 1.0
+  },
+  "details": [
+    {
+      "input": "Beli beras 5kg harganya 65rb",
+      "ground_truth": {
+        "item_name": "Beras",
+        "quantity": 5,
+        "unit": "kg",
+        "total_price": 65000,
+        "date": null
+      },
+      "prediction": {
+        "item_name": "Beras 5kg",
+        "quantity": 5.0,
+        "unit": null,
+        "total_price": 65000000.0,
+        "date": null
+      },
+      "valid_json": true,
+      "exact_match": false
+    },
+    {
+      "input": "Tanggal 10 Juli restock telur 2 tray total 60k",
+      "ground_truth": {
+        "item_name": "Telur",
+        "quantity": 2,
+        "unit": "tray",
+        "total_price": 60000,
+        "date": "2026-07-10"
+      },
+      "prediction": {
+        "item_name": "Telur",
+        "quantity": 2.0,
+        "unit": "tray",
+        "total_price": 60000.0,
+        "date": "2026-07-10"
+      },
+      "valid_json": true,
+      "exact_match": true
+    }
+  ]
+}

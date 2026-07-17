@@ -1,0 +1,3 @@
+{"input": "Beli tepung terigu 2 karung, total 250rb", "output": {"item_name": "Tepung terigu", "quantity": 2, "unit": "karung", "total_price": 250000, "date": null}}
+{"input": "Tadi pagi restock minyak goreng 5 liter, abis 90 ribu", "output": {"item_name": "Minyak goreng", "quantity": 5, "unit": "liter", "total_price": 90000, "date": null}}
+{"input": "Tanggal 3 Juli beli gula pasir 10kg seharga 150k", "output": {"item_name": "Gula pasir", "quantity": 10, "unit": "kg", "total_price": 150000, "date": "2026-07-03"}}

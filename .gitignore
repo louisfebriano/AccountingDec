@@ -1,0 +1,7 @@
+.env
+/checkpoints
+/adapters/*
+!/adapters/.gitkeep
+/data/processed/train.jsonl
+/data/processed/eval.jsonl
+/data/raw/
