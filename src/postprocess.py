@@ -3,11 +3,14 @@ Post-processing: ekstrak JSON dari output model + validasi field + resolve tangg
 """
 
 import json
+import re
 from datetime import date
 from typing import Optional
 from pydantic import BaseModel, ValidationError
 
 from .date_utils import resolve_relative_date
+
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class TransaksiSchema(BaseModel):
@@ -16,6 +19,16 @@ class TransaksiSchema(BaseModel):
     unit: Optional[str] = None
     total_price: Optional[float] = None
     date: Optional[str] = None
+
+
+def _is_valid_iso_date(value: Optional[str]) -> bool:
+    if not value or not ISO_DATE_PATTERN.match(value):
+        return False
+    try:
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 
 def parse_and_validate(
@@ -28,9 +41,11 @@ def parse_and_validate(
     Ambil HANYA objek JSON pertama yang valid (abaikan teks/JSON tambahan setelahnya,
     karena model kadang lanjut generate pola few-shot lain).
 
-    Kalau field "date" hasil model masih null DAN user_input mengandung kata tanggal
-    relatif ("kemarin", "hari ini", dll), field date akan diisi otomatis lewat rule-based
-    resolver (bukan diserahkan ke model, karena model nggak tau tanggal hari ini).
+    Field "date" akan di-resolve otomatis lewat rule-based resolver (bukan diserahkan ke
+    model, karena model nggak tau tanggal hari ini) kalau salah satu dari ini terjadi:
+    - model mengisi null
+    - model mengisi teks yang BUKAN format tanggal valid (misal "besok", "kemarin" mentah
+      ikut ke-generate sebagai value, bukan di-null-kan sebagaimana harusnya)
 
     Return dict {"success": bool, "data": ..., "error": ...}
     """
@@ -51,9 +66,8 @@ def parse_and_validate(
 
     result_data = validated.model_dump()
 
-    if result_data.get("date") is None and user_input:
+    if not _is_valid_iso_date(result_data.get("date")) and user_input:
         resolved = resolve_relative_date(user_input, reference_date)
-        if resolved is not None:
-            result_data["date"] = resolved
+        result_data["date"] = resolved  # None kalau nggak ketemu kata relatif juga
 
     return {"success": True, "data": result_data, "error": None}
