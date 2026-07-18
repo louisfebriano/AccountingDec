@@ -4,6 +4,7 @@
 !/adapters/.gitkeep
 /data/processed/train.jsonl
 /data/processed/eval.jsonl
+/data/processed/eval-relative.jsonl
 /data/raw/
 
 eval_results.json

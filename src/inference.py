@@ -2,11 +2,18 @@
 Pipeline inference: input kalimat kasual -> output JSON terstruktur.
 """
 
+import warnings
 import torch
 from . import config
 from .model_utils import load_tokenizer, load_model_for_inference
 from .prompt_utils import build_inference_prompt
 from .postprocess import parse_and_validate
+
+# Warning ini harmless: PEFT prompt tuning memang nggak pakai position_ids
+# (virtual token nggak punya posisi asli dalam sequence), jadi aman di-suppress.
+warnings.filterwarnings(
+    "ignore", message="Position ids are not supported for parameter efficient tuning*"
+)
 
 _tokenizer = None
 _model = None

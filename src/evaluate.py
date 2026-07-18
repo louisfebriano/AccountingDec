@@ -6,11 +6,17 @@ Metrik yang dihitung:
 - Exact match accuracy: persentase prediksi yang SELURUH field-nya sama persis dengan ground truth
 - Field-level precision/recall/F1: per field (item_name, quantity, unit, total_price, date)
 
-Jalankan: python -m src.evaluate --data data/processed/eval.jsonl --adapter adapters/soft-prompt-transaksi
+Jalankan:
+  python -m src.evaluate --data data/processed/eval.jsonl --adapter adapters/soft-prompt-transaksi
+
+Untuk data eval yang ground truth-nya mengandung tanggal relatif (kemarin/besok/dll),
+WAJIB set --reference-date sesuai asumsi tanggal saat data itu dibuat, contoh:
+  python -m src.evaluate --data data/processed/eval_relative_date.jsonl --reference-date 2026-07-18
 """
 
 import argparse
 import json
+from datetime import date
 
 from .inference import extract_transaction
 
@@ -38,7 +44,7 @@ def normalize(value):
     return value
 
 
-def evaluate(data_path: str, adapter_path: str = None):
+def evaluate(data_path: str, adapter_path: str = None, reference_date: date = None):
     dataset = load_jsonl(data_path)
 
     n_total = len(dataset)
@@ -55,7 +61,9 @@ def evaluate(data_path: str, adapter_path: str = None):
         user_input = example["input"]
         ground_truth = example["output"]
 
-        result = extract_transaction(user_input, adapter_path=adapter_path)
+        result = extract_transaction(
+            user_input, adapter_path=adapter_path, reference_date=reference_date
+        )
 
         row = {"input": user_input, "ground_truth": ground_truth}
 
@@ -118,9 +126,16 @@ if __name__ == "__main__":
     parser.add_argument("--data", default="data/processed/eval.jsonl")
     parser.add_argument("--adapter", default=None)
     parser.add_argument("--output", default="eval_results.json")
+    parser.add_argument(
+        "--reference-date",
+        default=None,
+        help="Format YYYY-MM-DD. Wajib diisi kalau data eval mengandung tanggal relatif "
+        "(kemarin/besok/dll), supaya ground truth bisa dicocokkan dengan benar.",
+    )
     args = parser.parse_args()
 
-    summary = evaluate(args.data, args.adapter)
+    ref_date = date.fromisoformat(args.reference_date) if args.reference_date else None
+    summary = evaluate(args.data, args.adapter, reference_date=ref_date)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
