@@ -9,9 +9,16 @@ Metrik yang dihitung:
 Jalankan:
   python -m src.evaluate --data data/processed/eval.jsonl --adapter adapters/soft-prompt-transaksi
 
-Untuk data eval yang ground truth-nya mengandung tanggal relatif (kemarin/besok/dll),
-WAJIB set --reference-date sesuai asumsi tanggal saat data itu dibuat, contoh:
-  python -m src.evaluate --data data/processed/eval_relative_date.jsonl --reference-date 2026-07-18
+Untuk data eval yang ground truth-nya mengandung tanggal relatif (kemarin/besok/dll)
+ATAU kalimat yang sama sekali tidak menyebut tanggal (date: null di file jsonl),
+WAJIB set --reference-date sesuai asumsi "hari ini" saat data itu dibuat, contoh:
+  python -m src.evaluate --data data/processed/eval.jsonl --reference-date 2026-07-18
+
+Kenapa null di-handle di sini (bukan di-hardcode di file jsonl): sistem selalu
+mengisi field "date" dengan reference_date kalau kalimat tidak menyebut tanggal sama
+sekali (lihat postprocess.py). Jadi ground truth "date: null" di file jsonl artinya
+"seharusnya sama dengan reference_date", dan itu di-resolve di sini, satu tempat,
+supaya file eval tidak perlu di-edit ulang tiap kali reference_date berubah.
 """
 
 import argparse
@@ -44,8 +51,21 @@ def normalize(value):
     return value
 
 
+def resolve_ground_truth_date(ground_truth: dict, reference_date: date) -> dict:
+    """
+    Kalau ground_truth["date"] masih null, artinya kalimat itu memang tidak menyebut
+    tanggal sama sekali -> sistem otomatis mengisi reference_date (lihat postprocess.py).
+    Jadi ground truth-nya di-resolve jadi reference_date juga sebelum dibandingkan.
+    """
+    resolved = dict(ground_truth)
+    if resolved.get("date") is None:
+        resolved["date"] = reference_date.isoformat()
+    return resolved
+
+
 def evaluate(data_path: str, adapter_path: str = None, reference_date: date = None):
     dataset = load_jsonl(data_path)
+    reference_date = reference_date or date.today()
 
     n_total = len(dataset)
     n_valid_json = 0
@@ -59,7 +79,7 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
 
     for example in dataset:
         user_input = example["input"]
-        ground_truth = example["output"]
+        ground_truth = resolve_ground_truth_date(example["output"], reference_date)
 
         result = extract_transaction(
             user_input, adapter_path=adapter_path, reference_date=reference_date
@@ -129,8 +149,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reference-date",
         default=None,
-        help="Format YYYY-MM-DD. Wajib diisi kalau data eval mengandung tanggal relatif "
-        "(kemarin/besok/dll), supaya ground truth bisa dicocokkan dengan benar.",
+        help="Format YYYY-MM-DD. Dipakai buat resolve tanggal relatif (kemarin/besok/dll) "
+        "DAN buat isi ground truth yang date-nya null (kalimat tanpa keterangan tanggal). "
+        "Kalau tidak diisi, default ke tanggal hari ini di komputer kamu.",
     )
     args = parser.parse_args()
 

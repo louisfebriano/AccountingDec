@@ -77,11 +77,14 @@ def parse_and_validate(
     reference_date = reference_date or date.today()
 
     # ---- Resolve date ----
-    if not _is_valid_iso_date(result_data.get("date")) and user_input:
-        resolved = resolve_relative_date(user_input, reference_date)
+    # Prioritas: kalau kalimat mengandung kata/pola tanggal relatif ("kemarin", "3 hari lalu",
+    # dll), SELALU pakai hasil resolver -- jangan percaya tanggal dari model sama sekali untuk
+    # kasus ini, karena model bisa hallucinate tanggal yang formatnya valid tapi isinya ngasal
+    # (mirip alasan kenapa total_price di-override lewat rule juga).
+    resolved = resolve_relative_date(user_input, reference_date) if user_input else None
+    if resolved is not None:
         result_data["date"] = resolved
-
-    if not _is_valid_iso_date(result_data.get("date")):
+    elif not _is_valid_iso_date(result_data.get("date")):
         result_data["date"] = reference_date.isoformat()
 
     # ---- Override total_price kalau pola harga eksplisit ketemu di kalimat asli ----
