@@ -21,7 +21,7 @@ def get_pipeline(adapter_path: str = None):
     return _tokenizer, _model
 
 
-def extract_transaction(user_input: str, adapter_path: str = None) -> dict:
+def extract_transaction(user_input: str, adapter_path: str = None, reference_date=None) -> dict:
     tokenizer, model = get_pipeline(adapter_path)
 
     prompt = build_inference_prompt(user_input)
@@ -42,6 +42,6 @@ def extract_transaction(user_input: str, adapter_path: str = None) -> dict:
         clean_up_tokenization_spaces=False,
     )
 
-    result = parse_and_validate(raw_output)
+    result = parse_and_validate(raw_output, user_input=user_input, reference_date=reference_date)
     result["raw_output"] = raw_output
     return result

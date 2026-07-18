@@ -4,6 +4,9 @@ API untuk ekstraksi transaksi UMKM.
 Jalankan: uvicorn src.api:app --reload --port 8000
 """
 
+from datetime import date
+from typing import Optional
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -14,6 +17,9 @@ app = FastAPI(title="UMKM Transaksi Extraction API")
 
 class ExtractRequest(BaseModel):
     text: str
+    # Tanggal acuan buat resolve kata relatif ("kemarin", "hari ini", dll).
+    # Kalau tidak dikirim, default-nya tanggal hari ini di server (format: YYYY-MM-DD).
+    reference_date: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -25,7 +31,8 @@ def warmup():
 
 @app.post("/extract")
 def extract(req: ExtractRequest):
-    result = extract_transaction(req.text)
+    reference_date = date.fromisoformat(req.reference_date) if req.reference_date else None
+    result = extract_transaction(req.text, reference_date=reference_date)
     return result
 
 
