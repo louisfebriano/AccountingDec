@@ -33,6 +33,15 @@ FEW_SHOT_EXAMPLES = [
 ]
 
 
+def build_inference_prompt(user_input: str) -> str:
+    """
+    Prompt polos (TANPA few-shot examples) yang dipakai baik saat training maupun inference.
+    Instruksi/pola task sudah "tertanam" di soft prompt (virtual tokens) hasil training,
+    jadi prompt di sini harus PERSIS sama strukturnya dengan yang dipakai di train.py.
+    """
+    return f"Kalimat: {user_input}\nJSON:"
+
+
 def build_prompt(user_input: str, examples: list = None) -> str:
     """Bangun prompt few-shot lengkap untuk satu input kasual."""
     examples = examples if examples is not None else FEW_SHOT_EXAMPLES

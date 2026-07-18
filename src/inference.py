@@ -5,7 +5,7 @@ Pipeline inference: input kalimat kasual -> output JSON terstruktur.
 import torch
 from . import config
 from .model_utils import load_tokenizer, load_model_for_inference
-from .prompt_utils import build_prompt
+from .prompt_utils import build_inference_prompt
 from .postprocess import parse_and_validate
 
 _tokenizer = None
@@ -24,7 +24,7 @@ def get_pipeline(adapter_path: str = None):
 def extract_transaction(user_input: str, adapter_path: str = None) -> dict:
     tokenizer, model = get_pipeline(adapter_path)
 
-    prompt = build_prompt(user_input)
+    prompt = build_inference_prompt(user_input)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
     with torch.no_grad():

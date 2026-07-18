@@ -13,7 +13,7 @@ from transformers import TrainingArguments, Trainer, DataCollatorForLanguageMode
 
 from . import config
 from .model_utils import load_tokenizer, load_model_for_training
-from .prompt_utils import build_prompt, _dict_to_json_str
+from .prompt_utils import build_inference_prompt, _dict_to_json_str
 
 
 def load_jsonl(path: str) -> list:
@@ -28,7 +28,7 @@ def load_jsonl(path: str) -> list:
 
 def format_example(example: dict, tokenizer):
     """Gabungkan prompt (tanpa few-shot examples, karena konteksnya sudah ada di soft prompt) + target JSON."""
-    prompt = f"Kalimat: {example['input']}\nJSON:"
+    prompt = build_inference_prompt(example["input"])
     target = _dict_to_json_str(example["output"])
     full_text = f"{prompt} {target}{tokenizer.eos_token}"
 

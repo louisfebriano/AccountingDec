@@ -5,3 +5,5 @@
 /data/processed/train.jsonl
 /data/processed/eval.jsonl
 /data/raw/
+
+eval_results.json

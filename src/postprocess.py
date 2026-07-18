@@ -17,10 +17,10 @@ class TransaksiSchema(BaseModel):
 
 def parse_and_validate(raw_output: str) -> dict:
     """
-    Parse raw output model jadi dict terstruktur + validasi.
-    Ambil HANYA objek JSON pertama yang valid (abaikan teks/JSON tambahan setelahnya,
-    karena model kadang lanjut generate pola few-shot lain).
-    Return dict {"success": bool, "data": ..., "error": ...}
+        Parse raw output model jadi dict terstruktur + validasi.
+        Ambil HANYA objek JSON pertama yang valid (abaikan teks/JSON tambahan setelahnya,
+        karena model kadang lanjut generate pola few-shot lain).
+        Return dict {"success": bool, "data": ..., "error": ...}
     """
     start = raw_output.find("{")
     if start == -1:
