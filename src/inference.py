@@ -8,6 +8,7 @@ from . import config
 from .model_utils import load_tokenizer, load_model_for_inference
 from .prompt_utils import build_inference_prompt
 from .postprocess import parse_and_validate
+from .validation import validate_transaction_context
 
 # Warning ini harmless: PEFT prompt tuning memang nggak pakai position_ids
 # (virtual token nggak punya posisi asli dalam sequence), jadi aman di-suppress.
@@ -29,6 +30,17 @@ def get_pipeline(adapter_path: str = None):
 
 
 def extract_transaction(user_input: str, adapter_path: str = None, reference_date=None) -> dict:
+    # Validasi konteks dulu SEBELUM panggil model -- hemat komputasi kalau kalimatnya
+    # jelas bukan transaksi, dan responnya lebih cepat + jelas alasannya ke user.
+    is_valid, reason = validate_transaction_context(user_input)
+    if not is_valid:
+        return {
+            "success": False,
+            "data": None,
+            "error": f"Input di luar konteks transaksi: {reason}",
+            "out_of_context": True,
+        }
+
     tokenizer, model = get_pipeline(adapter_path)
 
     prompt = build_inference_prompt(user_input)
@@ -51,4 +63,5 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
 
     result = parse_and_validate(raw_output, user_input=user_input, reference_date=reference_date)
     result["raw_output"] = raw_output
+    result["out_of_context"] = False
     return result

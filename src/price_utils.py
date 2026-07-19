@@ -82,3 +82,19 @@ def extract_price_from_text(text: str) -> Optional[float]:
         return float(max(bare_matches, key=lambda s: int(s)))
 
     return None
+
+
+def has_explicit_price_format(text: str) -> bool:
+    """
+    Cek apakah teks mengandung pola harga yang JELAS/eksplisit -- akhiran ribuan/ratusan/
+    jutaan (rb/ribu/rebu/k/ratus/juta/jt) atau format titik ribuan ("180.000"). SENGAJA
+    TIDAK memakai fallback "angka polos 4+ digit" seperti di extract_price_from_text,
+    karena fallback itu gampang salah tangkap angka lain yang bukan harga (nomor telepon,
+    kode barang, dll) -- cukup aman untuk override harga hasil model, tapi terlalu longgar
+    kalau dipakai untuk validasi "apakah ini kalimat transaksi".
+    """
+    if _SUFFIX_PATTERN.search(text):
+        return True
+    if _FULL_NUMBER_PATTERN.search(text):
+        return True
+    return False

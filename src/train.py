@@ -88,6 +88,6 @@ def main():
     tokenizer.save_pretrained(config.ADAPTER_OUTPUT_DIR)
     print(f"Soft prompt adapter tersimpan di: {config.ADAPTER_OUTPUT_DIR}")
 
-
+    
 if __name__ == "__main__":
     main()
