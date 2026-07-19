@@ -36,8 +36,10 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
     if not is_valid:
         return {
             "success": False,
+            "input": user_input,
             "data": None,
             "error": f"Input di luar konteks transaksi: {reason}",
+            "raw_output": None,
             "out_of_context": True,
         }
 
@@ -52,7 +54,7 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
             max_new_tokens=config.MAX_NEW_TOKENS,
             do_sample=False,
             tokenizer=tokenizer,
-            stop_strings=["\n\n", "\nKalimat"],
+            stop_strings=["\n\n", "\nKalimat", "Kalimat:"],
         )
 
     raw_output = tokenizer.decode(
@@ -61,7 +63,21 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
         clean_up_tokenization_spaces=False,
     )
 
+    # stop_strings berhenti SETELAH string itu selesai di-generate, tapi teksnya sendiri
+    # tetap ikut ke output (tidak otomatis dihapus transformers) -- di-strip di sini
+    # biar raw_output rapi, murni kosmetik, tidak mempengaruhi hasil parse.
+    stop_strings = ["\n\n", "\nKalimat", "Kalimat:"]
+    for stop in stop_strings:
+        if raw_output.endswith(stop):
+            raw_output = raw_output[: -len(stop)]
+            break
+
     result = parse_and_validate(raw_output, user_input=user_input, reference_date=reference_date)
-    result["raw_output"] = raw_output
-    result["out_of_context"] = False
-    return result
+    return {
+        "success": result["success"],
+        "input": user_input,
+        "data": result["data"],
+        "error": result["error"],
+        "raw_output": raw_output,
+        "out_of_context": False,
+    }

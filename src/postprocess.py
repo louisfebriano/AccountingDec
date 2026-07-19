@@ -9,7 +9,7 @@ from datetime import date
 from typing import Optional
 from pydantic import BaseModel, ValidationError
 
-from .date_utils import resolve_relative_date
+from .date_utils import resolve_date
 from .price_utils import extract_price_from_text
 
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -81,7 +81,7 @@ def parse_and_validate(
     # dll), SELALU pakai hasil resolver -- jangan percaya tanggal dari model sama sekali untuk
     # kasus ini, karena model bisa hallucinate tanggal yang formatnya valid tapi isinya ngasal
     # (mirip alasan kenapa total_price di-override lewat rule juga).
-    resolved = resolve_relative_date(user_input, reference_date) if user_input else None
+    resolved = resolve_date(user_input, reference_date) if user_input else None
     if resolved is not None:
         result_data["date"] = resolved
     elif not _is_valid_iso_date(result_data.get("date")):
