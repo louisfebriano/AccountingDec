@@ -1,7 +1,5 @@
 """
-API untuk ekstraksi transaksi UMKM.
-
-Jalankan: uvicorn src.api:app --reload --port 8000
+uvicorn src.api:app --reload --port 8000
 """
 
 from datetime import date
@@ -17,14 +15,11 @@ app = FastAPI(title="UMKM Transaksi Extraction API")
 
 class ExtractRequest(BaseModel):
     text: str
-    # Tanggal acuan buat resolve kata relatif ("kemarin", "hari ini", dll).
-    # Kalau tidak dikirim, default-nya tanggal hari ini di server (format: YYYY-MM-DD).
     reference_date: Optional[str] = None
 
 
 @app.on_event("startup")
 def warmup():
-    # load model sekali saja saat server start, biar request pertama tidak lambat
     from .inference import get_pipeline
     get_pipeline()
 

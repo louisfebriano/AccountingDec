@@ -56,6 +56,8 @@ _NUMERIC_DAYS_AHEAD = re.compile(r"\b(\d+)\s*hari\s+(?:lagi|kemudian)\b")
 # supaya "kemarin lusa" nggak ke-match sebagai "kemarin" duluan.
 RELATIVE_DATE_PATTERNS = [
     (r"\bkemarin\s+lusa\b", -2),
+    (r"\bminggu\s+kemarin\b", -7),
+    (r"\bbulan\s+kemarin\b", -30),
     (r"\bkemarin\b", -1),
     (r"\bkmrn\b", -1),
     (r"\blusa\b", 2),
@@ -70,7 +72,6 @@ RELATIVE_DATE_PATTERNS = [
     (r"\btadi\b", 0),
     (r"\bseminggu\s+(?:yang\s+)?lalu\b", -7),
     (r"\bminggu\s+lalu\b", -7),
-    (r"\bminggu\s+kemarin\b", -7),
     (r"\bsebulan\s+(?:yang\s+)?lalu\b", -30),
     (r"\bbulan\s+lalu\b", -30),
 ]
