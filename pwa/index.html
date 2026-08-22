@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1f7a5b">
+    <meta name="description" content="Pencatat transaksi UMKM melalui teks dan suara.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CatatKas">
+    <title>CatatKas — Pencatat Transaksi UMKM</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png" type="image/png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header" id="beranda">
+        <a class="brand" href="#beranda" aria-label="CatatKas, kembali ke beranda">
+          <span class="brand-mark" aria-hidden="true">CK</span>
+          <span>
+            <strong>CatatKas</strong>
+            <small>Pencatat Transaksi UMKM</small>
+          </span>
+        </a>
+        <div class="header-actions">
+          <span class="connection" id="connection-status" role="status">
+            <span class="connection-dot" aria-hidden="true"></span>
+            <span id="connection-label">Online</span>
+          </span>
+          <button class="button button-secondary install-button" id="install-button" type="button" hidden>
+            Pasang aplikasi
+          </button>
+          <button class="icon-button" id="settings-button" type="button" aria-label="Buka pengaturan">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z"></path>
+              <path d="M19.1 13.8a7.6 7.6 0 0 0 .05-3.6l2-1.55-2-3.45-2.5 1a7.5 7.5 0 0 0-3.1-1.8L13.2 1.75h-4L8.85 4.4a7.5 7.5 0 0 0-3.1 1.8l-2.5-1-2 3.45 2 1.55a7.6 7.6 0 0 0 .05 3.6l-2.05 1.55 2 3.45 2.55-1a7.5 7.5 0 0 0 3.05 1.75l.35 2.7h4l.35-2.7a7.5 7.5 0 0 0 3.05-1.75l2.55 1 2-3.45-2.05-1.55Z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="summary-section" aria-labelledby="summary-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Ringkasan perangkat ini</p>
+              <h1 id="summary-title">Keuangan tercatat</h1>
+            </div>
+            <p>Data tersimpan hanya di browser ini.</p>
+          </div>
+          <div class="summary-grid">
+            <article class="summary-card balance-card">
+              <span>Saldo tercatat</span>
+              <strong id="summary-balance">Rp0</strong>
+            </article>
+            <article class="summary-card income-card">
+              <span>Total pemasukan</span>
+              <strong id="summary-income">Rp0</strong>
+            </article>
+            <article class="summary-card expense-card">
+              <span>Total pengeluaran</span>
+              <strong id="summary-expense">Rp0</strong>
+            </article>
+          </div>
+        </section>
+
+        <div class="offline-banner" id="offline-banner" role="status" hidden>
+          Anda sedang offline. Riwayat tetap dapat dilihat, tetapi pencatatan membutuhkan koneksi ke server.
+        </div>
+
+        <div class="content-grid">
+          <section class="panel capture-panel" id="catat" aria-labelledby="capture-title">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Transaksi baru</p>
+                <h2 id="capture-title">Catat transaksi</h2>
+              </div>
+              <span class="single-badge">1 transaksi</span>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Metode pencatatan">
+              <button class="tab-button is-active" id="text-tab" type="button" role="tab" aria-selected="true" aria-controls="text-panel">Teks</button>
+              <button class="tab-button" id="voice-tab" type="button" role="tab" aria-selected="false" aria-controls="voice-panel" tabindex="-1">Suara</button>
+            </div>
+
+            <div class="tab-panel" id="text-panel" role="tabpanel" aria-labelledby="text-tab">
+              <form id="text-form">
+                <label for="transaction-text">Kalimat transaksi</label>
+                <textarea id="transaction-text" name="text" maxlength="500" rows="5" placeholder="3 bakmi laku terjual 60 ribu" required></textarea>
+                <div class="field-meta">
+                  <span>Satu transaksi dalam satu kalimat.</span>
+                  <span><span id="character-count">0</span>/500</span>
+                </div>
+                <button class="button button-primary submit-button" id="text-submit" type="submit">
+                  <span class="button-label">Catat transaksi</span>
+                  <span class="spinner" aria-hidden="true"></span>
+                </button>
+              </form>
+            </div>
+
+            <div class="tab-panel" id="voice-panel" role="tabpanel" aria-labelledby="voice-tab" hidden>
+              <div class="voice-recorder">
+                <div class="record-visual" id="record-visual" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+                    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"></path>
+                  </svg>
+                </div>
+                <p class="voice-status" id="voice-status">Siap merekam satu transaksi.</p>
+                <strong class="record-timer" id="record-timer">00:00</strong>
+                <div class="voice-actions">
+                  <button class="button button-primary" id="record-button" type="button">Mulai merekam</button>
+                  <button class="button button-danger" id="stop-button" type="button" disabled>Berhenti</button>
+                </div>
+                <p class="voice-help" id="voice-help">Durasi maksimal 30 detik. Audio tidak disimpan setelah diproses.</p>
+              </div>
+            </div>
+
+            <div class="status-message" id="request-status" role="status" aria-live="polite"></div>
+
+            <article class="result-card" id="result-card" aria-labelledby="result-title" hidden>
+              <div class="result-header">
+                <div>
+                  <p class="eyebrow">Hasil terakhir</p>
+                  <h3 id="result-title">Transaksi berhasil dicatat</h3>
+                </div>
+                <span class="type-pill" id="result-type">Pemasukan</span>
+              </div>
+              <dl class="result-grid">
+                <div><dt>Nominal</dt><dd id="result-price">—</dd></div>
+                <div><dt>Tanggal</dt><dd id="result-date">—</dd></div>
+                <div><dt>Nama barang</dt><dd id="result-item">—</dd></div>
+                <div><dt>Jumlah</dt><dd id="result-quantity">—</dd></div>
+                <div><dt>Satuan</dt><dd id="result-unit">—</dd></div>
+                <div><dt>Sumber</dt><dd id="result-source">—</dd></div>
+              </dl>
+              <p class="result-input" id="result-input"></p>
+            </article>
+          </section>
+
+          <section class="panel history-panel" id="riwayat" aria-labelledby="history-title">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Perangkat ini</p>
+                <h2 id="history-title">Riwayat terbaru</h2>
+              </div>
+              <button class="text-button" id="clear-history-button" type="button">Hapus riwayat</button>
+            </div>
+            <div class="empty-state" id="empty-history">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"></path>
+              </svg>
+              <strong>Belum ada transaksi</strong>
+              <p>Transaksi yang berhasil akan tampil di sini dan tersimpan pada perangkat Anda.</p>
+            </div>
+            <ol class="history-list" id="history-list" aria-live="polite"></ol>
+          </section>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <span>CatatKas</span>
+        <span>Inferensi memerlukan koneksi ke backend.</span>
+        <span>Dibuat oleh Louis Febriano.</span>
+      </footer>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Navigasi utama">
+      <a href="#beranda">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 8-7 8 7v9h-6v-6h-4v6H4z"></path></svg>
+        Beranda
+      </a>
+      <a href="#catat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        Catat
+      </a>
+      <a href="#riwayat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h13M7 12h13M7 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+        Riwayat
+      </a>
+      <button id="bottom-settings" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-3-2 .5-2-1L14.5 5h-5L9 7.5l-2 1L5 8l-2 3 2 1v2l-2 1 2 3 2-.5 2 1 .5 2.5h5l.5-2.5 2-1 2 .5 2-3-2-1z"></path></svg>
+        Pengaturan
+      </button>
+    </nav>
+
+    <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Preferensi lokal</p>
+          <h2 id="settings-title">Pengaturan</h2>
+        </div>
+        <button class="icon-button" id="close-settings" type="button" aria-label="Tutup pengaturan">×</button>
+      </div>
+      <div class="dialog-content">
+        <section>
+          <h3>Penyimpanan</h3>
+          <p>Maksimal 50 transaksi disimpan di browser ini. Rekaman suara dan output mentah model tidak pernah disimpan.</p>
+        </section>
+        <section id="ios-install-hint" hidden>
+          <h3>Pasang di iPhone atau iPad</h3>
+          <p>Buka menu Bagikan, lalu pilih Tambahkan ke Layar Utama.</p>
+        </section>
+        <section>
+          <h3>Koneksi</h3>
+          <p>Pencatatan membutuhkan server CatatKas. Aplikasi tidak menjalankan Llama atau Whisper secara offline.</p>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="dialog-clear-history" type="button">Hapus riwayat lokal</button>
+        <button class="button button-primary" id="done-settings" type="button">Selesai</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -5,6 +5,7 @@ Metrik yang dihitung:
 - JSON validity rate: persentase output yang berhasil diparse jadi JSON valid + lolos schema
 - Exact match accuracy: persentase prediksi yang SELURUH field-nya sama persis dengan ground truth
 - Field-level precision/recall/F1: per field (item_name, quantity, unit, total_price, date)
+- Akurasi transaction_type: hanya untuk contoh yang memiliki label income/expense/unknown
 
 Jalankan:
   python -m src.evaluate --data data/processed/eval.jsonl --adapter adapters/soft-prompt-transaksi
@@ -28,6 +29,7 @@ from datetime import date
 from .inference import extract_transaction
 
 FIELDS = ["item_name", "quantity", "unit", "total_price", "date"]
+TRANSACTION_TYPES = ("income", "expense", "unknown")
 
 
 def load_jsonl(path: str) -> list:
@@ -70,6 +72,10 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
     n_total = len(dataset)
     n_valid_json = 0
     n_exact_match = 0
+    n_transaction_type_labeled = 0
+    n_transaction_type_correct = 0
+    transaction_type_total = {value: 0 for value in TRANSACTION_TYPES}
+    transaction_type_correct = {value: 0 for value in TRANSACTION_TYPES}
 
     # akumulasi TP/FP/FN per field, dihitung sebagai "match" vs "tidak match"
     field_correct = {f: 0 for f in FIELDS}
@@ -80,17 +86,28 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
     for example in dataset:
         user_input = example["input"]
         ground_truth = resolve_ground_truth_date(example["output"], reference_date)
+        ground_truth_type = normalize(ground_truth.get("transaction_type"))
+        has_transaction_type_label = ground_truth_type in TRANSACTION_TYPES
+        if has_transaction_type_label:
+            n_transaction_type_labeled += 1
+            transaction_type_total[ground_truth_type] += 1
 
         result = extract_transaction(
             user_input, adapter_path=adapter_path, reference_date=reference_date
         )
 
-        row = {"input": user_input, "ground_truth": ground_truth}
+        row = {
+            "input": user_input,
+            "ground_truth": ground_truth,
+            "transaction_type_labeled": has_transaction_type_label,
+        }
 
         if not result["success"]:
             row["prediction"] = None
             row["valid_json"] = False
             row["exact_match"] = False
+            if has_transaction_type_label:
+                row["transaction_type_match"] = False
             results_log.append(row)
             continue
 
@@ -98,6 +115,14 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
         prediction = result["data"]
         row["prediction"] = prediction
         row["valid_json"] = True
+
+        if has_transaction_type_label:
+            predicted_type = normalize(prediction.get("transaction_type"))
+            type_match = predicted_type == ground_truth_type
+            row["transaction_type_match"] = type_match
+            if type_match:
+                n_transaction_type_correct += 1
+                transaction_type_correct[ground_truth_type] += 1
 
         is_exact_match = True
         for field in FIELDS:
@@ -128,6 +153,22 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
         correct = field_correct[field]
         acc = (correct / total * 100) if total > 0 else 0.0
         print(f"  {field:<15}: {correct}/{total} ({acc:.1f}%)")
+    print("-" * 60)
+    print(f"Label transaction_type    : {n_transaction_type_labeled}/{n_total}")
+    if n_transaction_type_labeled:
+        type_accuracy = n_transaction_type_correct / n_transaction_type_labeled * 100
+        print(
+            "Akurasi transaction_type  : "
+            f"{n_transaction_type_correct}/{n_transaction_type_labeled} "
+            f"({type_accuracy:.1f}%)"
+        )
+    else:
+        print("Akurasi transaction_type  : N/A (tidak ada label)")
+    for transaction_type in TRANSACTION_TYPES:
+        total = transaction_type_total[transaction_type]
+        correct = transaction_type_correct[transaction_type]
+        accuracy = (correct / total * 100) if total else 0.0
+        print(f"  {transaction_type:<15}: {correct}/{total} ({accuracy:.1f}%)")
     print("=" * 60)
 
     return {
@@ -136,6 +177,28 @@ def evaluate(data_path: str, adapter_path: str = None, reference_date: date = No
         "exact_match_accuracy": n_exact_match / n_total if n_total else 0,
         "field_accuracy": {
             f: (field_correct[f] / field_total[f] if field_total[f] else 0) for f in FIELDS
+        },
+        "transaction_type_evaluation": {
+            "labeled_examples": n_transaction_type_labeled,
+            "correct": n_transaction_type_correct,
+            "accuracy": (
+                n_transaction_type_correct / n_transaction_type_labeled
+                if n_transaction_type_labeled
+                else None
+            ),
+            "per_type": {
+                transaction_type: {
+                    "total": transaction_type_total[transaction_type],
+                    "correct": transaction_type_correct[transaction_type],
+                    "accuracy": (
+                        transaction_type_correct[transaction_type]
+                        / transaction_type_total[transaction_type]
+                        if transaction_type_total[transaction_type]
+                        else None
+                    ),
+                }
+                for transaction_type in TRANSACTION_TYPES
+            },
         },
         "details": results_log,
     }

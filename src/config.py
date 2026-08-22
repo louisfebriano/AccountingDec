@@ -36,3 +36,17 @@ MAX_SEQ_LENGTH = 256
 
 # ---- Inference ----
 MAX_NEW_TOKENS = 256
+
+# ---- Speech-to-text (faster-whisper) ----
+# Whisper sengaja berjalan di CPU secara default agar tidak berebut VRAM dengan Llama.
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "small")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "id")
+WHISPER_VAD_FILTER = os.getenv("WHISPER_VAD_FILTER", "true").lower() in {
+    "1", "true", "yes", "on",
+}
+
+# Batas request audio. Nilai environment variable dinyatakan dalam MB.
+AUDIO_MAX_SIZE_MB = int(os.getenv("AUDIO_MAX_SIZE_MB", "10"))
+AUDIO_MAX_SIZE_BYTES = AUDIO_MAX_SIZE_MB * 1024 * 1024

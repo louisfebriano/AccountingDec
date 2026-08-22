@@ -18,7 +18,8 @@ TRANSACTION_KEYWORDS = [
     "bayar", "membayar",
     "dapat", "terima", "masuk",
     "keluar", "pengeluaran", "pemasukan",
-    "ambil", "order", "pesan", "kulakan",
+    "pemasukkan", "pendapatan", "penghasilan", "omzet", "income", "duit",
+    "ambil", "order", "pesan", "kulakan", "transfer",
 ]
 
 _HAS_DIGIT = re.compile(r"\d")

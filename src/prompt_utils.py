@@ -21,7 +21,7 @@ FEW_SHOT_EXAMPLES = [
         },
     },
     {
-        "input": "Hari Rabu 1 Juli, restock susu kaleng 1 dus dengan total harga 200k",
+        "input": "Hari Rabu 1 Juli  , restock susu kaleng 1 dus dengan total harga 200k",
         "output": {
             "item_name": "Susu kaleng",
             "quantity": 1,

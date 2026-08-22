@@ -2,12 +2,18 @@
 Pipeline inference: input kalimat kasual -> output JSON terstruktur.
 """
 
+import json
 import warnings
 import torch
 from . import config
 from .model_utils import load_tokenizer, load_model_for_inference
 from .prompt_utils import build_inference_prompt
 from .postprocess import parse_and_validate
+from .price_utils import extract_price_from_text
+from .transaction_type import (
+    classify_transaction_type,
+    is_general_income_transaction,
+)
 from .validation import validate_transaction_context
 
 # Warning ini harmless: PEFT prompt tuning memang nggak pakai position_ids
@@ -18,6 +24,49 @@ warnings.filterwarnings(
 
 _tokenizer = None
 _model = None
+
+UNKNOWN_TRANSACTION_TYPE_ERROR = (
+    "Jenis transaksi tidak dapat ditentukan. Gunakan konteks pemasukan "
+    "atau pengeluaran yang lebih jelas."
+)
+
+
+def _extract_general_income(user_input: str, reference_date=None) -> dict:
+    """Selesaikan pemasukan umum secara deterministik tanpa memanggil Llama."""
+    total_price = extract_price_from_text(user_input)
+    if total_price is None:
+        return {
+            "success": False,
+            "input": user_input,
+            "data": None,
+            "error": "Nominal pemasukan tidak ditemukan atau formatnya tidak dikenali",
+            "raw_output": None,
+            "out_of_context": False,
+        }
+
+    deterministic_output = json.dumps(
+        {
+            "item_name": None,
+            "quantity": None,
+            "unit": None,
+            "total_price": total_price,
+            "date": None,
+        }
+    )
+    result = parse_and_validate(
+        deterministic_output,
+        user_input=user_input,
+        reference_date=reference_date,
+        transaction_type="income",
+    )
+    return {
+        "success": result["success"],
+        "input": user_input,
+        "data": result["data"],
+        "error": result["error"],
+        "raw_output": deterministic_output,
+        "out_of_context": False,
+    }
 
 
 def get_pipeline(adapter_path: str = None):
@@ -42,6 +91,20 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
             "raw_output": None,
             "out_of_context": True,
         }
+
+    transaction_type = classify_transaction_type(user_input)
+    if transaction_type == "unknown":
+        return {
+            "success": False,
+            "input": user_input,
+            "data": None,
+            "error": UNKNOWN_TRANSACTION_TYPE_ERROR,
+            "raw_output": None,
+            "out_of_context": False,
+        }
+
+    if is_general_income_transaction(user_input):
+        return _extract_general_income(user_input, reference_date=reference_date)
 
     tokenizer, model = get_pipeline(adapter_path)
 
@@ -72,7 +135,12 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
             raw_output = raw_output[: -len(stop)]
             break
 
-    result = parse_and_validate(raw_output, user_input=user_input, reference_date=reference_date)
+    result = parse_and_validate(
+        raw_output,
+        user_input=user_input,
+        reference_date=reference_date,
+        transaction_type=transaction_type,
+    )
     return {
         "success": result["success"],
         "input": user_input,
