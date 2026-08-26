@@ -1,14 +1,17 @@
-const CACHE_NAME = "catatkas-shell-v3";
+const CACHE_NAME = "catatkas-shell-v15";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/api.js",
-  "/formatters.js",
-  "/storage.js",
-  "/request-gate.js",
-  "/recorder.js",
+  "/styles.css?v=15",
+  "/app.js?v=15",
+  "/api.js?v=15",
+  "/formatters.js?v=15",
+  "/filters.js?v=15",
+  "/chart.js?v=15",
+  "/theme.js?v=15",
+  "/storage.js?v=15",
+  "/request-gate.js?v=15",
+  "/recorder.js?v=15",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
@@ -54,15 +57,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      });
-      return cached || network;
-    }),
+      })
+      .catch(() => caches.match(request)),
   );
 });

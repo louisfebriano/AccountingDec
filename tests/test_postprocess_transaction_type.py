@@ -246,6 +246,74 @@ class PostprocessTransactionTypeTests(unittest.TestCase):
         self.assertEqual(result["data"]["quantity"], 1.5)
         self.assertEqual(result["data"]["unit"], "liter")
 
+    def test_clear_quantity_and_unit_override_wrong_model_details(self):
+        cases = (
+            ("restok santan 10bks 50rb", "Santan", 10, "bungkus"),
+            ("beli gula 500gram 8rb", "Gula", 500, "gram"),
+            ("beli santan 200ml 3rb", "Santan", 200, "ml"),
+            ("beli cabai rawit seperempat kilo 9rb", "Cabai rawit", 0.25, "kg"),
+            ("beli gas elpiji 3kg 3tbg 60rb", "Gas elpiji 3kg", 3, "tabung"),
+        )
+
+        for text, item_name, quantity, unit in cases:
+            with self.subTest(text=text):
+                raw_output = json.dumps(
+                    {
+                        "item_name": item_name,
+                        "quantity": 1,
+                        "unit": "karung",
+                        "total_price": 1,
+                        "date": None,
+                    }
+                )
+                result = parse_and_validate(
+                    raw_output,
+                    user_input=text,
+                    reference_date=date(2026, 8, 24),
+                    transaction_type="expense",
+                )
+
+                self.assertEqual(result["data"]["quantity"], quantity)
+                self.assertEqual(result["data"]["unit"], unit)
+
+    def test_outer_package_is_selected_in_both_word_orders(self):
+        cases = (
+            ("beli kecap 2dus isi 24btl 130rb", 2, "dus"),
+            ("beli kecap isi 24 botol 1dus totalnya 130rb", 1, "dus"),
+            ("beli telur 1papan isi 30 55rb", 1, "papan"),
+        )
+
+        for text, quantity, unit in cases:
+            with self.subTest(text=text):
+                raw_output = json.dumps(
+                    {
+                        "item_name": "Kecap" if "kecap" in text else "Telur",
+                        "quantity": 24,
+                        "unit": "botol",
+                        "total_price": 1,
+                        "date": None,
+                    }
+                )
+                result = parse_and_validate(
+                    raw_output,
+                    user_input=text,
+                    reference_date=date(2026, 8, 24),
+                    transaction_type="expense",
+                )
+
+                self.assertEqual(result["data"]["quantity"], quantity)
+                self.assertEqual(result["data"]["unit"], unit)
+
+    def test_short_relative_date_is_resolved_deterministically(self):
+        result = parse_and_validate(
+            self.raw_transaction,
+            user_input="kmrn beli tepung terigu 2 karung 250rb",
+            reference_date=date(2026, 8, 24),
+            transaction_type="expense",
+        )
+
+        self.assertEqual(result["data"]["date"], "2026-08-23")
+
 
 if __name__ == "__main__":
     unittest.main()

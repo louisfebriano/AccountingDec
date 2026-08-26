@@ -4,6 +4,7 @@ Pipeline inference: input kalimat kasual -> output JSON terstruktur.
 
 import json
 import warnings
+from datetime import date
 import torch
 from . import config
 from .model_utils import load_tokenizer, load_model_for_inference
@@ -29,6 +30,7 @@ UNKNOWN_TRANSACTION_TYPE_ERROR = (
     "Jenis transaksi tidak dapat ditentukan. Gunakan konteks pemasukan "
     "atau pengeluaran yang lebih jelas."
 )
+GENERATION_STOP_STRINGS = [".Kalimat:", "\n\n", "\nKalimat", "Kalimat:"]
 
 
 def _extract_general_income(user_input: str, reference_date=None) -> dict:
@@ -108,7 +110,8 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
 
     tokenizer, model = get_pipeline(adapter_path)
 
-    prompt = build_inference_prompt(user_input)
+    effective_reference_date = reference_date or date.today()
+    prompt = build_inference_prompt(user_input, effective_reference_date)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
     with torch.no_grad():
@@ -117,7 +120,7 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
             max_new_tokens=config.MAX_NEW_TOKENS,
             do_sample=False,
             tokenizer=tokenizer,
-            stop_strings=["\n\n", "\nKalimat", "Kalimat:"],
+            stop_strings=GENERATION_STOP_STRINGS,
         )
 
     raw_output = tokenizer.decode(
@@ -129,8 +132,7 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
     # stop_strings berhenti SETELAH string itu selesai di-generate, tapi teksnya sendiri
     # tetap ikut ke output (tidak otomatis dihapus transformers) -- di-strip di sini
     # biar raw_output rapi, murni kosmetik, tidak mempengaruhi hasil parse.
-    stop_strings = ["\n\n", "\nKalimat", "Kalimat:"]
-    for stop in stop_strings:
+    for stop in GENERATION_STOP_STRINGS:
         if raw_output.endswith(stop):
             raw_output = raw_output[: -len(stop)]
             break
@@ -138,7 +140,7 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
     result = parse_and_validate(
         raw_output,
         user_input=user_input,
-        reference_date=reference_date,
+        reference_date=effective_reference_date,
         transaction_type=transaction_type,
     )
     return {

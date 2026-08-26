@@ -20,10 +20,12 @@ class FakeInputs(dict):
 class FakeTokenizer:
     def __init__(self, raw_output='{"item_name":"Tepung","quantity":2}'):
         self.raw_output = raw_output
+        self.prompt = None
 
-    def __call__(self, _prompt, return_tensors):
+    def __call__(self, prompt, return_tensors):
         if return_tensors != "pt":
             raise AssertionError("Unexpected tensor format")
+        self.prompt = prompt
         return FakeInputs()
 
     def decode(self, _token_ids, **_kwargs):
@@ -45,20 +47,25 @@ class InferenceTransactionTypeTests(unittest.TestCase):
             "error": None,
         }
         parse = Mock(return_value=parsed_result)
+        tokenizer = FakeTokenizer()
 
         with (
             patch.object(
                 inference,
                 "get_pipeline",
-                return_value=(FakeTokenizer(), FakeModel()),
+                return_value=(tokenizer, FakeModel()),
             ),
             patch.object(inference, "parse_and_validate", parse),
         ):
-            result = inference.extract_transaction("Beli tepung 2 karung 250rb")
+            result = inference.extract_transaction(
+                "Beli tepung 2 karung 250rb",
+                reference_date=date(2026, 8, 24),
+            )
 
         self.assertTrue(result["success"])
         self.assertEqual(result["data"]["transaction_type"], "expense")
         self.assertEqual(parse.call_args.kwargs["transaction_type"], "expense")
+        self.assertTrue(tokenizer.prompt.startswith("REFERENCE_DATE: 2026-08-24\n"))
 
     def test_general_income_is_extracted_without_loading_llama(self):
         examples = (
@@ -66,6 +73,8 @@ class InferenceTransactionTypeTests(unittest.TestCase):
             ("pemasukkan hari ini 3 juta rupiah", 3000000),
             ("duit masuk 300 ribu", 300000),
             ("uang masuk 300 ribu", 300000),
+            ("masuk uang 600 ribu", 600000),
+            ("masuk duit 250 ribu", 250000),
             ("pendapatan hari ini 2 juta", 2000000),
             ("hasil penjualan hari ini 750 ribu", 750000),
             ("pemasukan hari ini 750.000", 750000),
@@ -99,6 +108,38 @@ class InferenceTransactionTypeTests(unittest.TestCase):
 
         self.assertEqual(result["data"]["date"], "2026-08-20")
         pipeline.assert_not_called()
+
+    def test_general_income_prefers_explicit_date_over_kemarin(self):
+        with patch.object(inference, "get_pipeline") as pipeline:
+            result = inference.extract_transaction(
+                "tanggal 27 juni kemarin, masuk uang 600 ribu",
+                reference_date=date(2026, 8, 25),
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["transaction_type"], "income")
+        self.assertEqual(result["data"]["total_price"], 600000)
+        self.assertEqual(result["data"]["date"], "2026-06-27")
+        pipeline.assert_not_called()
+
+    def test_hari_minggu_kemarin_overrides_model_date(self):
+        raw_output = (
+            '{"item_name":"Gas 3kg","quantity":3,"unit":"tabung",'
+            '"total_price":60000,"date":"2026-08-18"}'
+        )
+        with patch.object(
+            inference,
+            "get_pipeline",
+            return_value=(FakeTokenizer(raw_output), FakeModel()),
+        ):
+            result = inference.extract_transaction(
+                "hari minggu kemarin beli gas 3kg 3 tabung 60 ribu",
+                reference_date=date(2026, 8, 25),
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["transaction_type"], "expense")
+        self.assertEqual(result["data"]["date"], "2026-08-23")
 
     def test_general_income_without_nominal_is_rejected_before_model(self):
         with patch.object(inference, "get_pipeline") as pipeline:

@@ -25,10 +25,27 @@ PROMPT_TUNING_INIT_TEXT = (
     "Ekstrak informasi transaksi dari kalimat kasual UMKM menjadi JSON terstruktur."
 )
 ADAPTER_OUTPUT_DIR = "adapters/soft-prompt-transaksi"
+SOFT_PROMPT_CONTRACT_VERSION = 2
+SOFT_PROMPT_CONTRACT_FILENAME = "catatkas_contract.json"
 
 # ---- Training ----
 TRAIN_DATA_PATH = "data/processed/train.jsonl"
-EVAL_DATA_PATH = "data/processed/eval.jsonl"
+TRAIN_AUGMENTATION_DATA_PATH = "data/processed/train-augmentation.jsonl"
+TRAIN_VALIDATION_DATA_PATH = os.getenv(
+    "TRAIN_VALIDATION_DATA_PATH",
+    "data/processed/validation-six-fields.jsonl",
+)
+EVAL_DATA_PATH = "data/processed/eval-six-fields.jsonl"
+TRAIN_REFERENCE_DATE = os.getenv("TRAIN_REFERENCE_DATE", "2026-08-24")
+TRAIN_REFERENCE_DATE_VARIANTS = int(os.getenv("TRAIN_REFERENCE_DATE_VARIANTS", "4"))
+TRAIN_REFERENCE_DATE_STEP_DAYS = int(
+    os.getenv("TRAIN_REFERENCE_DATE_STEP_DAYS", "7")
+)
+TRAIN_VALIDATION_RATIO = float(os.getenv("TRAIN_VALIDATION_RATIO", "0.1"))
+TRAIN_SEED = int(os.getenv("TRAIN_SEED", "42"))
+BALANCE_TRANSACTION_TYPES = os.getenv(
+    "BALANCE_TRANSACTION_TYPES", "true"
+).lower() in {"1", "true", "yes", "on"}
 NUM_EPOCHS = 10
 LEARNING_RATE = 3e-3
 BATCH_SIZE = 1

@@ -23,6 +23,8 @@ class TransactionTypeClassifierTests(unittest.TestCase):
             "Pelanggan beli 2 bakmi 40rb",
             "Pemasukkan hari ini 3 juta rupiah",
             "Duit masuk 300 ribu",
+            "Tanggal 27 Juni kemarin, masuk uang 600 ribu",
+            "Kemarin masuk duit 250 ribu",
             "Penghasilan hari ini 1 juta",
             "Omzet hari ini 3 juta",
             "Income hari ini 400 ribu",

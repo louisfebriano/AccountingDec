@@ -1,0 +1,24 @@
+{"input":"Pagi ini beli beras merah 7kg total 105rb","output":{"item_name":"Beras merah","quantity":7,"unit":"kg","total_price":105000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Kemarin restok minyak kelapa 6ltr habis 132rb","output":{"item_name":"Minyak kelapa","quantity":6,"unit":"liter","total_price":132000,"date":"2026-08-23","transaction_type":"expense"}}
+{"input":"Tanggal 19 Agustus beli telur ayam 3 tray total 90k","output":{"item_name":"Telur ayam","quantity":3,"unit":"tray","total_price":90000,"date":"2026-08-19","transaction_type":"expense"}}
+{"input":"Barusan beli tisu dapur total 28rb","output":{"item_name":"Tisu dapur","quantity":null,"unit":null,"total_price":28000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli bawang putih setengah kilo 22rb","output":{"item_name":"Bawang putih","quantity":0.5,"unit":"kg","total_price":22000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Restok saus cabai 2dus isi 24btl total 288rb","output":{"item_name":"Saus cabai","quantity":2,"unit":"dus","total_price":288000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Bayar listrik toko 425rb hari ini","output":{"item_name":"Listrik toko","quantity":null,"unit":null,"total_price":425000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Tadi bayar gaji pegawai 1,2 juta","output":{"item_name":"Gaji pegawai","quantity":null,"unit":null,"total_price":1200000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"3 hari lalu beli kopi robusta 4krg 360rb","output":{"item_name":"Kopi robusta","quantity":4,"unit":"karung","total_price":360000,"date":"2026-08-21","transaction_type":"expense"}}
+{"input":"kmrn beli air mineral 5dus total 240rb","output":{"item_name":"Air mineral","quantity":5,"unit":"dus","total_price":240000,"date":"2026-08-23","transaction_type":"expense"}}
+{"input":"Beli gas elpiji 5,5kg sebanyak 2tbg total 410rb","output":{"item_name":"Gas elpiji 5,5kg","quantity":2,"unit":"tabung","total_price":410000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restock sedotan kertas 10pak 85k tadi sore","output":{"item_name":"Sedotan kertas","quantity":10,"unit":"pak","total_price":85000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Jual 9 porsi bubur ayam total 135rb","output":{"item_name":"Bubur ayam","quantity":9,"unit":"porsi","total_price":135000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin terjual 14 gelas thai tea 168rb","output":{"item_name":"Thai tea","quantity":14,"unit":"gelas","total_price":168000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Hari ini pelanggan bayar 3 kotak snack total 150rb","output":{"item_name":"Snack","quantity":3,"unit":"kotak","total_price":150000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Pemasukan hari ini 680rb","output":{"item_name":null,"quantity":null,"unit":null,"total_price":680000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"2 hari lalu 11 porsi pecel lele laku 220rb","output":{"item_name":"Pecel lele","quantity":11,"unit":"porsi","total_price":220000,"date":"2026-08-22","transaction_type":"income"}}
+{"input":"Tanggal 21 Agustus jual 6 botol jamu 72k","output":{"item_name":"Jamu","quantity":6,"unit":"botol","total_price":72000,"date":"2026-08-21","transaction_type":"income"}}
+{"input":"8 bungkus risoles terjual total 80rb tadi pagi","output":{"item_name":"Risoles","quantity":8,"unit":"bungkus","total_price":80000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Pembeli membeli 2 dus minuman soda 190rb","output":{"item_name":"Minuman soda","quantity":2,"unit":"dus","total_price":190000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Jual kue lapis 95rb","output":{"item_name":"Kue lapis","quantity":null,"unit":null,"total_price":95000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin duit masuk 540000 dari penjualan","output":{"item_name":null,"quantity":null,"unit":null,"total_price":540000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Tadi sore jual 4 loyang pizza total 480rb","output":{"item_name":"Pizza","quantity":4,"unit":"loyang","total_price":480000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Minggu lalu terjual 30 buah pastel total 150rb","output":{"item_name":"Pastel","quantity":30,"unit":"buah","total_price":150000,"date":"2026-08-17","transaction_type":"income"}}

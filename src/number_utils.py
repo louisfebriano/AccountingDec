@@ -26,6 +26,16 @@ _NUMBER_PHRASE_PATTERN = re.compile(
     rf"\b(?:{_WORD_ALTERNATIVES})(?:[\s-]+(?:{_WORD_ALTERNATIVES}))*\b",
     re.IGNORECASE,
 )
+_FRACTION_PATTERN = re.compile(
+    r"\b(tiga\s+perempat|setengah|seperempat)\b"
+    r"(?=\s+(?:kg|kilo|kilogram|gram|gr|liter|ltr|ml|mililiter)\b)",
+    re.IGNORECASE,
+)
+_FRACTION_VALUES = {
+    "setengah": "0.5",
+    "seperempat": "0.25",
+    "tiga perempat": "0.75",
+}
 
 
 def _parse_under_hundred(words: List[str]) -> Optional[int]:
@@ -116,16 +126,23 @@ def _parse_number_phrase(phrase: str) -> Optional[int]:
 
 
 def normalize_indonesian_numbers(text: str) -> str:
-    """Ganti frasa bilangan Indonesia yang didukung dengan digit desimal."""
+    """Ganti bilangan bulat dan pecahan-unit yang didukung dengan digit."""
     if not text:
         return text
 
+    normalized_text = _FRACTION_PATTERN.sub(
+        lambda match: _FRACTION_VALUES[
+            re.sub(r"\s+", " ", match.group(1).casefold())
+        ],
+        text,
+    )
+
     def replace_phrase(match: re.Match) -> str:
-        before = text[:match.start()].rstrip().lower()
-        after = text[match.end():].lstrip().lower()
+        before = normalized_text[:match.start()].rstrip().lower()
+        after = normalized_text[match.end():].lstrip().lower()
         if before.endswith("koma") or after.startswith("koma"):
             return match.group(0)
         value = _parse_number_phrase(match.group(0))
         return str(value) if value is not None else match.group(0)
 
-    return _NUMBER_PHRASE_PATTERN.sub(replace_phrase, text)
+    return _NUMBER_PHRASE_PATTERN.sub(replace_phrase, normalized_text)

@@ -34,10 +34,18 @@ class NormalizeIndonesianNumbersTests(unittest.TestCase):
             "Kemarin beli tepung terigu 2 karung total 250000",
         )
 
-    def test_keeps_unsupported_ambiguous_phrases_unchanged(self):
+    def test_normalizes_simple_fraction_when_followed_by_measurement_unit(self):
         self.assertEqual(
-            normalize_indonesian_numbers("beli setengah kilo seharga dua koma lima juta"),
-            "beli setengah kilo seharga dua koma lima juta",
+            normalize_indonesian_numbers(
+                "beli setengah kilo dan seperempat liter"
+            ),
+            "beli 0.5 kilo dan 0.25 liter",
+        )
+
+    def test_keeps_spoken_decimal_and_ambiguous_fraction_unchanged(self):
+        self.assertEqual(
+            normalize_indonesian_numbers("harga dua koma lima juta dan tambah setengah"),
+            "harga dua koma lima juta dan tambah setengah",
         )
 
 

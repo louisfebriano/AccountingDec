@@ -1,6 +1,4 @@
-"""
-Load base model (Llama 3.1) dan setup PEFT Prompt Tuning.
-"""
+"""Load base model Llama 3.2 3B-Instruct dan setup PEFT Prompt Tuning."""
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig

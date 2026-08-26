@@ -1,0 +1,52 @@
+{"input":"Barusan beli beras pandan wangi 5kg total 78rb","output":{"item_name":"Beras pandan wangi","quantity":5,"unit":"kg","total_price":78000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Tanggal 10 Juli restock telur 2 tray total 60k","output":{"item_name":"Telur","quantity":2,"unit":"tray","total_price":60000,"date":"2026-07-10","transaction_type":"expense"}}
+{"input":"hari ini beli beras 25kg 275rb","output":{"item_name":"Beras","quantity":25,"unit":"kg","total_price":275000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"tadi pagi restok telur 3kg 66rebu","output":{"item_name":"Telur","quantity":3,"unit":"kg","total_price":66000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli tepung 4krg 440rebu","output":{"item_name":"Tepung","quantity":4,"unit":"karung","total_price":440000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restok kopi 2krg 160rb","output":{"item_name":"Kopi","quantity":2,"unit":"karung","total_price":160000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli aqua 20 galon 70k","output":{"item_name":"Aqua","quantity":20,"unit":"galon","total_price":70000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli isi ulang galon 4 galon 60rebu","output":{"item_name":"Isi ulang galon","quantity":4,"unit":"galon","total_price":60000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli daging sapi 2kg 190rebu buat rendang","output":{"item_name":"Daging sapi","quantity":2,"unit":"kg","total_price":190000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restok santan 10bks 50rebu","output":{"item_name":"Santan","quantity":10,"unit":"bungkus","total_price":50000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli telur 1papan isi 30 55rb","output":{"item_name":"Telur","quantity":1,"unit":"papan","total_price":55000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli teh celup 3kotak 27rebu","output":{"item_name":"Teh celup","quantity":3,"unit":"kotak","total_price":27000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"kmrn restok saus sambal 15btl 75rb","output":{"item_name":"Saus sambal","quantity":15,"unit":"botol","total_price":75000,"date":"2026-08-23","transaction_type":"expense"}}
+{"input":"beli kecap 2dus isi 24btl 130rebu","output":{"item_name":"Kecap","quantity":2,"unit":"dus","total_price":130000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli gas elpiji 3kg 3tbg 60rb","output":{"item_name":"Gas elpiji 3kg","quantity":3,"unit":"tabung","total_price":60000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli mentega 4bks 60rebu buat kue","output":{"item_name":"Mentega","quantity":4,"unit":"bungkus","total_price":60000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restok ragi instan 8bks 40rb","output":{"item_name":"Ragi instan","quantity":8,"unit":"bungkus","total_price":40000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli daun pisang 15lbr 15rebu buat bungkus","output":{"item_name":"Daun pisang","quantity":15,"unit":"lembar","total_price":15000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli wortel 5kg 40rb","output":{"item_name":"Wortel","quantity":5,"unit":"kg","total_price":40000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli galon aqua 70rb","output":{"item_name":"Galon aqua","quantity":null,"unit":null,"total_price":70000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli telur 45500","output":{"item_name":"Telur","quantity":null,"unit":null,"total_price":45500,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restok minyak 80000 buat 5 liter","output":{"item_name":"Minyak","quantity":5,"unit":"liter","total_price":80000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli cabai rawit seperempat kilo 9rb","output":{"item_name":"Cabai rawit","quantity":0.25,"unit":"kg","total_price":9000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli telur 1lusin 25rb","output":{"item_name":"Telur","quantity":1,"unit":"lusin","total_price":25000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli plastik kemasan 1rim 45rb","output":{"item_name":"Plastik kemasan","quantity":1,"unit":"rim","total_price":45000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli susu uht 12pcs 84rb","output":{"item_name":"Susu UHT","quantity":12,"unit":"pcs","total_price":84000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli roti 20buah 40rb","output":{"item_name":"Roti","quantity":20,"unit":"buah","total_price":40000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli telur ceplok 6biji buat testing 12rb","output":{"item_name":"Telur ceplok","quantity":6,"unit":"biji","total_price":12000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli gas 3kg 2tabung 40rb","output":{"item_name":"Gas 3kg","quantity":2,"unit":"tabung","total_price":40000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli gula 500gram 8rb","output":{"item_name":"Gula","quantity":500,"unit":"gram","total_price":8000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli santan 200ml 3rb","output":{"item_name":"Santan","quantity":200,"unit":"ml","total_price":3000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli kecap isi 24 botol 1dus totalnya 130rb yaa","output":{"item_name":"Kecap","quantity":1,"unit":"dus","total_price":130000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli beras premium 5kg buat stok 65000 nih","output":{"item_name":"Beras premium","quantity":5,"unit":"kg","total_price":65000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"tadi restok galon aqua 15 botol abis 52500","output":{"item_name":"Galon aqua","quantity":15,"unit":"botol","total_price":52500,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli isi ulang galon 8galon totalnya 120rb","output":{"item_name":"Isi ulang galon","quantity":8,"unit":"galon","total_price":120000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli tepung 3karung isi 25kg per karung 825rb","output":{"item_name":"Tepung","quantity":3,"unit":"karung","total_price":825000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"restok kopi sachet 5box 45rb","output":{"item_name":"Kopi sachet","quantity":5,"unit":"box","total_price":45000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli daging ayam giling 2kg 50rb buat bakso","output":{"item_name":"Daging ayam giling","quantity":2,"unit":"kg","total_price":50000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"beli kertas nasi 2pak 30rb","output":{"item_name":"Kertas nasi","quantity":2,"unit":"pak","total_price":30000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Barusan jual 8 porsi nasi goreng total 160rb","output":{"item_name":"Nasi goreng","quantity":8,"unit":"porsi","total_price":160000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin 12 gelas es teh terjual total 60rb","output":{"item_name":"Es teh","quantity":12,"unit":"gelas","total_price":60000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"hari ini pelanggan membeli 3 botol jus mangga 45rb","output":{"item_name":"Jus mangga","quantity":3,"unit":"botol","total_price":45000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"tadi pagi 5 roti cokelat laku 75rb","output":{"item_name":"Roti cokelat","quantity":5,"unit":null,"total_price":75000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Tanggal 20 Agustus jual 4 kotak bolu total 120k","output":{"item_name":"Bolu","quantity":4,"unit":"kotak","total_price":120000,"date":"2026-08-20","transaction_type":"income"}}
+{"input":"2 hari lalu terjual 6 bungkus keripik pisang 54rb","output":{"item_name":"Keripik pisang","quantity":6,"unit":"bungkus","total_price":54000,"date":"2026-08-22","transaction_type":"income"}}
+{"input":"minggu lalu jual 10 porsi bakmi 200rb","output":{"item_name":"Bakmi","quantity":10,"unit":"porsi","total_price":200000,"date":"2026-08-17","transaction_type":"income"}}
+{"input":"duit masuk 350rb dari hasil penjualan hari ini","output":{"item_name":null,"quantity":null,"unit":null,"total_price":350000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"kemarin pemasukan warung 500000","output":{"item_name":null,"quantity":null,"unit":null,"total_price":500000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"jual kopi gula aren 15 gelas total 225rb tadi sore","output":{"item_name":"Kopi gula aren","quantity":15,"unit":"gelas","total_price":225000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"terjual 2 dus air mineral 96rb","output":{"item_name":"Air mineral","quantity":2,"unit":"dus","total_price":96000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"pembeli beli 4 porsi ayam penyet 80rb tanggal 22 Agustus","output":{"item_name":"Ayam penyet","quantity":4,"unit":"porsi","total_price":80000,"date":"2026-08-22","transaction_type":"income"}}
+{"input":"3 hari lalu 20 buah donat laku total 100rb","output":{"item_name":"Donat","quantity":20,"unit":"buah","total_price":100000,"date":"2026-08-21","transaction_type":"income"}}

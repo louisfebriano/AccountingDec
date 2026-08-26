@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#1f7a5b">
+    <meta name="theme-color" content="#EFF5F9">
     <meta name="description" content="Pencatat transaksi UMKM melalui teks dan suara.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=15">
   </head>
   <body>
     <div class="app-shell">
@@ -29,6 +29,9 @@
             <span class="connection-dot" aria-hidden="true"></span>
             <span id="connection-label">Online</span>
           </span>
+          <button class="icon-button theme-toggle" id="theme-toggle" type="button" aria-label="Aktifkan mode gelap" title="Aktifkan mode gelap">
+            <span class="theme-glyph" aria-hidden="true"></span>
+          </button>
           <button class="button button-secondary install-button" id="install-button" type="button" hidden>
             Pasang aplikasi
           </button>
@@ -64,7 +67,39 @@
               <strong id="summary-expense">Rp0</strong>
             </article>
           </div>
+          <p class="period-summary">Periode ringkasan: <strong id="summary-period-label">Bulan berjalan</strong></p>
         </section>
+
+        <section class="panel trend-panel" aria-labelledby="trend-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="trend-eyebrow">Bulan berjalan</p>
+              <h2 id="trend-title">Tren harian</h2>
+            </div>
+            <div class="chart-legend" aria-label="Legenda grafik">
+              <span><i class="legend-dot income-dot" aria-hidden="true"></i>Pemasukan</span>
+              <span><i class="legend-dot expense-dot" aria-hidden="true"></i>Pengeluaran</span>
+            </div>
+          </div>
+          <div class="chart-scroll">
+            <svg id="weekly-chart" class="weekly-chart" viewBox="0 0 700 270" role="group" aria-labelledby="trend-title chart-summary"></svg>
+          </div>
+          <div class="chart-tooltip" id="chart-tooltip" role="status" aria-live="polite" hidden>
+            <strong id="chart-tooltip-date">—</strong>
+            <span><i class="legend-dot income-dot" aria-hidden="true"></i>Pemasukan <b id="chart-tooltip-income">Rp0</b></span>
+            <span><i class="legend-dot expense-dot" aria-hidden="true"></i>Pengeluaran <b id="chart-tooltip-expense">Rp0</b></span>
+          </div>
+        </section>
+
+        <aside class="panel chart-insight" id="chart-insight" data-state="empty" aria-labelledby="chart-insight-title">
+          <span class="chart-insight-icon" aria-hidden="true">i</span>
+          <div>
+            <p class="chart-insight-kicker" id="chart-insight-title">
+              Insight periode · <span id="chart-insight-period">Bulan berjalan</span>
+            </p>
+            <p class="chart-summary" id="chart-summary">Belum ada transaksi pada bulan berjalan.</p>
+          </div>
+        </aside>
 
         <div class="offline-banner" id="offline-banner" role="status" hidden>
           Anda sedang offline. Riwayat tetap dapat dilihat, tetapi pencatatan membutuhkan koneksi ke server.
@@ -102,12 +137,12 @@
 
             <div class="tab-panel" id="voice-panel" role="tabpanel" aria-labelledby="voice-tab" hidden>
               <div class="voice-recorder">
-                <div class="record-visual" id="record-visual" aria-hidden="true">
+                <button class="record-visual" id="record-visual" type="button" aria-label="Mulai merekam suara" title="Mulai merekam suara">
                   <svg viewBox="0 0 24 24">
                     <rect x="9" y="3" width="6" height="11" rx="3"></rect>
                     <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"></path>
                   </svg>
-                </div>
+                </button>
                 <p class="voice-status" id="voice-status">Siap merekam satu transaksi.</p>
                 <strong class="record-timer" id="record-timer">00:00</strong>
                 <div class="voice-actions">
@@ -144,16 +179,61 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Perangkat ini</p>
-                <h2 id="history-title">Riwayat terbaru</h2>
+                <h2 id="history-title">Riwayat transaksi</h2>
               </div>
-              <button class="text-button" id="clear-history-button" type="button">Hapus riwayat</button>
+              <div class="history-actions">
+                <button class="button button-primary compact-button" id="add-manual-button" type="button">Tambah manual</button>
+                <button class="text-button" id="clear-history-button" type="button">Hapus semua</button>
+              </div>
+            </div>
+            <div class="filter-card" aria-labelledby="filter-title">
+              <div class="filter-heading">
+                <strong id="filter-title">Filter periode</strong>
+                <button class="text-button filter-reset" id="reset-filter-button" type="button">Semua</button>
+              </div>
+              <div class="filter-grid">
+                <div class="form-field">
+                  <label for="period-mode">Periode</label>
+                  <select id="period-mode">
+                    <option value="week">Minggu</option>
+                    <option value="month" selected>Bulan</option>
+                    <option value="year">Tahun</option>
+                    <option value="custom">Tanggal khusus</option>
+                    <option value="all">Semua</option>
+                  </select>
+                </div>
+                <div class="form-field period-field" id="week-filter-field" hidden>
+                  <label for="week-filter-date">Tanggal dalam minggu</label>
+                  <input id="week-filter-date" type="date">
+                </div>
+                <div class="form-field period-field" id="month-filter-field">
+                  <label for="month-filter-value">Bulan</label>
+                  <input id="month-filter-value" type="month">
+                </div>
+                <div class="form-field period-field" id="year-filter-field" hidden>
+                  <label for="year-filter-value">Tahun</label>
+                  <input id="year-filter-value" type="number" min="1900" max="9999" inputmode="numeric">
+                </div>
+                <div class="custom-date-fields period-field" id="custom-filter-fields" hidden>
+                  <div class="form-field">
+                    <label for="custom-start-date">Tanggal mulai</label>
+                    <input id="custom-start-date" type="date">
+                  </div>
+                  <div class="form-field">
+                    <label for="custom-end-date">Tanggal akhir</label>
+                    <input id="custom-end-date" type="date">
+                  </div>
+                </div>
+              </div>
+              <p class="active-period" id="active-period">Menampilkan bulan berjalan.</p>
+              <p class="field-error" id="filter-error" role="alert"></p>
             </div>
             <div class="empty-state" id="empty-history">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"></path>
               </svg>
-              <strong>Belum ada transaksi</strong>
-              <p>Transaksi yang berhasil akan tampil di sini dan tersimpan pada perangkat Anda.</p>
+              <strong id="empty-history-title">Belum ada transaksi</strong>
+              <p id="empty-history-description">Transaksi yang berhasil akan tampil di sini dan tersimpan pada perangkat Anda.</p>
             </div>
             <ol class="history-list" id="history-list" aria-live="polite"></ol>
           </section>
@@ -162,8 +242,8 @@
 
       <footer class="app-footer">
         <span>CatatKas</span>
-        <span>Inferensi memerlukan koneksi ke backend.</span>
-        <span>Dibuat oleh Louis Febriano.</span>
+        <span></span>
+        <span>Louis Febriano 535230136</span>
       </footer>
     </div>
 
@@ -199,6 +279,10 @@
           <h3>Penyimpanan</h3>
           <p>Maksimal 50 transaksi disimpan di browser ini. Rekaman suara dan output mentah model tidak pernah disimpan.</p>
         </section>
+        <section>
+          <h3>Tampilan</h3>
+          <p>Gunakan tombol tema pada header untuk berpindah antara tema putih dan mode gelap. Pilihan disimpan di perangkat ini.</p>
+        </section>
         <section id="ios-install-hint" hidden>
           <h3>Pasang di iPhone atau iPad</h3>
           <p>Buka menu Bagikan, lalu pilih Tambahkan ke Layar Utama.</p>
@@ -214,6 +298,89 @@
       </div>
     </dialog>
 
-    <script type="module" src="/app.js"></script>
+    <dialog class="settings-dialog detail-dialog" id="transaction-detail-dialog" aria-labelledby="detail-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Detail riwayat</p>
+          <h2 id="detail-title">Detail transaksi</h2>
+        </div>
+        <button class="icon-button" id="close-detail-button" type="button" aria-label="Tutup detail transaksi">×</button>
+      </div>
+      <dl class="detail-grid">
+        <div><dt>Jenis</dt><dd id="detail-type">—</dd></div>
+        <div><dt>Nominal</dt><dd id="detail-price">—</dd></div>
+        <div><dt>Tanggal</dt><dd id="detail-date">—</dd></div>
+        <div><dt>Nama barang</dt><dd id="detail-item">—</dd></div>
+        <div><dt>Quantity</dt><dd id="detail-quantity">—</dd></div>
+        <div><dt>Unit</dt><dd id="detail-unit">—</dd></div>
+        <div><dt>Sumber</dt><dd id="detail-source">—</dd></div>
+        <div><dt>Waktu dicatat</dt><dd id="detail-created-at">—</dd></div>
+      </dl>
+      <section class="detail-text-section" id="detail-original-section">
+        <h3 id="detail-original-label">Input asli</h3>
+        <p id="detail-original-text">—</p>
+      </section>
+      <section class="detail-text-section" id="detail-normalized-section" hidden>
+        <h3>Teks normalisasi</h3>
+        <p id="detail-normalized-text">—</p>
+      </section>
+      <div class="dialog-actions detail-actions">
+        <button class="button button-danger" id="delete-transaction-button" type="button">Hapus</button>
+        <button class="button button-secondary" id="edit-transaction-button" type="button">Edit</button>
+        <button class="button button-primary" id="done-detail-button" type="button">Tutup</button>
+      </div>
+    </dialog>
+
+    <dialog class="settings-dialog transaction-form-dialog" id="transaction-form-dialog" aria-labelledby="transaction-form-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Pencatatan lokal</p>
+          <h2 id="transaction-form-title">Tambah transaksi manual</h2>
+        </div>
+        <button class="icon-button" id="close-transaction-form-button" type="button" aria-label="Tutup form transaksi">×</button>
+      </div>
+      <form id="manual-transaction-form">
+        <div class="manual-form-grid">
+          <div class="form-field">
+            <label for="manual-transaction-type">Jenis transaksi</label>
+            <select id="manual-transaction-type" required>
+              <option value="income">Pemasukan</option>
+              <option value="expense">Pengeluaran</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="manual-date">Tanggal</label>
+            <input id="manual-date" type="date" required>
+          </div>
+          <div class="form-field manual-price-field">
+            <label for="manual-total-price">Nominal</label>
+            <input id="manual-total-price" type="number" min="1" step="1" inputmode="numeric" placeholder="250000" required>
+          </div>
+          <div class="form-field">
+            <label for="manual-item-name">Nama barang <span>(opsional)</span></label>
+            <input id="manual-item-name" type="text" maxlength="500">
+          </div>
+          <div class="form-field">
+            <label for="manual-quantity">Quantity <span>(opsional)</span></label>
+            <input id="manual-quantity" type="number" min="0.01" step="any" inputmode="decimal">
+          </div>
+          <div class="form-field">
+            <label for="manual-unit">Unit <span>(opsional)</span></label>
+            <input id="manual-unit" type="text" maxlength="500" placeholder="porsi, kg, karung">
+          </div>
+          <div class="form-field manual-note-field">
+            <label for="manual-note">Catatan <span>(opsional)</span></label>
+            <textarea id="manual-note" maxlength="500" rows="3"></textarea>
+          </div>
+        </div>
+        <p class="field-error" id="manual-form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="cancel-transaction-form-button" type="button">Batal</button>
+          <button class="button button-primary" type="submit">Simpan transaksi</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js?v=15"></script>
   </body>
 </html>

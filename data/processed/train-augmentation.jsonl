@@ -1,0 +1,28 @@
+{"input":"Beli susu pasteurisasi UHT 6pcs total 48rb","output":{"item_name":"Susu pasteurisasi UHT","quantity":6,"unit":"pcs","total_price":48000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Restok kopi arabika sachet 4box total 52rb","output":{"item_name":"Kopi arabika sachet","quantity":4,"unit":"box","total_price":52000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli gula halus 250gram seharga 7rb","output":{"item_name":"Gula halus","quantity":250,"unit":"gram","total_price":7000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli sirup melon 300ml seharga 18rb","output":{"item_name":"Sirup melon","quantity":300,"unit":"ml","total_price":18000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli cabai hijau setengah kilo 18rb","output":{"item_name":"Cabai hijau","quantity":0.5,"unit":"kg","total_price":18000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Restok saus tomat 3dus isi 12btl total 210rb","output":{"item_name":"Saus tomat","quantity":3,"unit":"dus","total_price":210000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli kecap manis isi 12 botol 2dus total 160rb","output":{"item_name":"Kecap manis","quantity":2,"unit":"dus","total_price":160000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Beli gas elpiji 12kg sebanyak 2tbg total 430rb","output":{"item_name":"Gas elpiji 12kg","quantity":2,"unit":"tabung","total_price":430000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Jual 7 porsi soto ayam total 140rb","output":{"item_name":"Soto ayam","quantity":7,"unit":"porsi","total_price":140000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin terjual 12 gelas es jeruk 72rb","output":{"item_name":"Es jeruk","quantity":12,"unit":"gelas","total_price":72000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Hari ini pelanggan beli 4 botol jus alpukat total 80rb","output":{"item_name":"Jus alpukat","quantity":4,"unit":"botol","total_price":80000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Tadi pagi 9 roti bakar laku 135rb","output":{"item_name":"Roti bakar","quantity":9,"unit":null,"total_price":135000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Tanggal 18 Agustus menjual 5 kotak brownies total 250k","output":{"item_name":"Brownies","quantity":5,"unit":"kotak","total_price":250000,"date":"2026-08-18","transaction_type":"income"}}
+{"input":"2 hari lalu terjual 6 bungkus kerupuk 48rb","output":{"item_name":"Kerupuk","quantity":6,"unit":"bungkus","total_price":48000,"date":"2026-08-22","transaction_type":"income"}}
+{"input":"Minggu lalu jual 10 porsi mie ayam 180rb","output":{"item_name":"Mie ayam","quantity":10,"unit":"porsi","total_price":180000,"date":"2026-08-17","transaction_type":"income"}}
+{"input":"Jual kopi susu 15 gelas total 225rb tadi sore","output":{"item_name":"Kopi susu","quantity":15,"unit":"gelas","total_price":225000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Terjual 3 dus air mineral total 144rb","output":{"item_name":"Air mineral","quantity":3,"unit":"dus","total_price":144000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Pembeli membeli 4 porsi ayam geprek 88rb tanggal 20 Agustus","output":{"item_name":"Ayam geprek","quantity":4,"unit":"porsi","total_price":88000,"date":"2026-08-20","transaction_type":"income"}}
+{"input":"Pelanggan bayar 2 loyang kue ulang tahun total 600rb","output":{"item_name":"Kue ulang tahun","quantity":2,"unit":"loyang","total_price":600000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"3 hari lalu jual 8 porsi bakso total 160rb","output":{"item_name":"Bakso","quantity":8,"unit":"porsi","total_price":160000,"date":"2026-08-21","transaction_type":"income"}}
+{"input":"Hari ini terjual 25 buah donat total 125rb","output":{"item_name":"Donat","quantity":25,"unit":"buah","total_price":125000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Tanggal 23 Agustus pelanggan membeli 2 kotak pizza 180rb","output":{"item_name":"Pizza","quantity":2,"unit":"kotak","total_price":180000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Tadi sore jual 6 botol sambal rumahan 90rb","output":{"item_name":"Sambal rumahan","quantity":6,"unit":"botol","total_price":90000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin 30 porsi nasi kotak laku total 750rb","output":{"item_name":"Nasi kotak","quantity":30,"unit":"porsi","total_price":750000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Hari ini pemasukan 450rb dari penjualan warung","output":{"item_name":null,"quantity":null,"unit":null,"total_price":450000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"Kemarin duit masuk 320rb dari hasil penjualan","output":{"item_name":null,"quantity":null,"unit":null,"total_price":320000,"date":"2026-08-23","transaction_type":"income"}}
+{"input":"Pendapatan hari ini 275000","output":{"item_name":null,"quantity":null,"unit":null,"total_price":275000,"date":"2026-08-24","transaction_type":"income"}}
+{"input":"2 hari lalu uang masuk 180rb","output":{"item_name":null,"quantity":null,"unit":null,"total_price":180000,"date":"2026-08-22","transaction_type":"income"}}

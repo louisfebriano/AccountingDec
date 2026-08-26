@@ -15,6 +15,7 @@ class PwaStaticTests(unittest.TestCase):
         home = client.get("/")
         manifest = client.get("/manifest.webmanifest")
         worker = client.get("/sw.js")
+        styles = client.get("/styles.css")
 
         self.assertEqual(home.status_code, 200)
         self.assertIn("CatatKas", home.text)
@@ -22,7 +23,22 @@ class PwaStaticTests(unittest.TestCase):
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json()["display"], "standalone")
         self.assertEqual(worker.status_code, 200)
-        self.assertIn("catatkas-shell-v3", worker.text)
+        self.assertIn("catatkas-shell-v15", worker.text)
+        self.assertEqual(styles.status_code, 200)
+        self.assertIn("--primary-color: #03bfb5", styles.text)
+        self.assertIn("--secondary-color: #018076", styles.text)
+        self.assertIn("--background-color: #eff5f9", styles.text)
+        self.assertIn("--background: var(--background-color)", styles.text)
+        self.assertIn("transaction-detail-dialog", home.text)
+        self.assertIn("manual-transaction-form", home.text)
+        self.assertIn("weekly-chart", home.text)
+        self.assertIn("chart-tooltip", home.text)
+        self.assertIn("chart-insight", home.text)
+        self.assertIn("chart-insight-period", home.text)
+        self.assertIn("chart-summary", home.text)
+        self.assertIn("theme-toggle", home.text)
+        self.assertIn('id="record-visual"', home.text)
+        self.assertIn('aria-label="Mulai merekam suara"', home.text)
 
     def test_pwa_icons_have_expected_png_dimensions(self):
         expected = {

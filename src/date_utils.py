@@ -51,6 +51,21 @@ _NUMERIC_WEEKS_AGO = re.compile(r"\b(\d+)\s*minggu\s+(?:yang\s+)?lalu\b")
 _NUMERIC_DAYS_AGO = re.compile(r"\b(\d+)\s*hari\s+(?:yang\s+)?lalu\b")
 _NUMERIC_DAYS_AHEAD = re.compile(r"\b(\d+)\s*hari\s+(?:lagi|kemudian)\b")
 
+_WEEKDAY_INDEX = {
+    "senin": 0,
+    "selasa": 1,
+    "rabu": 2,
+    "kamis": 3,
+    "jumat": 4,
+    "sabtu": 5,
+    "minggu": 6,
+    "ahad": 6,
+}
+_PREVIOUS_WEEKDAY = re.compile(
+    r"\bhari\s+(senin|selasa|rabu|kamis|jumat|sabtu|minggu|ahad)\s+"
+    r"(?:kemarin|(?:yang\s+)?lalu)\b"
+)
+
 # Pola kata tetap (fixed keyword, delta harinya sudah pasti).
 # Urutan penting: frasa lebih spesifik/panjang dicek duluan sebelum yang lebih umum,
 # supaya "kemarin lusa" nggak ke-match sebagai "kemarin" duluan.
@@ -131,6 +146,14 @@ def resolve_relative_date(user_input: str, reference_date: Optional[date] = None
     """
     reference_date = reference_date or date.today()
     text_lower = user_input.lower()
+
+    weekday_match = _PREVIOUS_WEEKDAY.search(text_lower)
+    if weekday_match:
+        target_weekday = _WEEKDAY_INDEX[weekday_match.group(1)]
+        days_ago = (reference_date.weekday() - target_weekday) % 7
+        if days_ago == 0:
+            days_ago = 7
+        return (reference_date - timedelta(days=days_ago)).isoformat()
 
     match = _NUMERIC_WEEKS_AGO.search(text_lower)
     if match:
