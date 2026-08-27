@@ -1,0 +1,67 @@
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from src import receipt_service
+
+
+class ReceiptServiceTests(unittest.TestCase):
+    def tearDown(self):
+        receipt_service._ocr_model = None
+
+    def test_paddle_output_keeps_text_confidence_and_box(self):
+        box = [[0, 0], [100, 0], [100, 20], [0, 20]]
+        result = receipt_service.normalize_paddle_result([
+            [
+                [box, ("TOKO MAKMUR", 0.96)],
+                [box, ("TOTAL 25.000", 0.91)],
+            ]
+        ])
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["text"], "TOKO MAKMUR")
+        self.assertEqual(result[1]["confidence"], 0.91)
+        self.assertEqual(result[0]["box"], box)
+
+    def test_model_is_loaded_lazily_and_cached_once(self):
+        instance = object()
+        constructor = Mock(return_value=instance)
+        fake_module = types.SimpleNamespace(PaddleOCR=constructor)
+        with patch.dict(sys.modules, {"paddleocr": fake_module}):
+            first = receipt_service.get_receipt_ocr_model()
+            second = receipt_service.get_receipt_ocr_model()
+        self.assertIs(first, instance)
+        self.assertIs(second, instance)
+        constructor.assert_called_once()
+
+    def test_preprocessed_file_is_deleted_after_success(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as handle:
+            processed_path = Path(handle.name)
+        model = Mock()
+        model.ocr.return_value = []
+        with (
+            patch.object(receipt_service, "preprocess_receipt_image", return_value=processed_path),
+            patch.object(receipt_service, "get_receipt_ocr_model", return_value=model),
+        ):
+            result = receipt_service.extract_receipt(Path("unused.jpg"))
+        self.assertEqual(result["ocr_text"], "")
+        self.assertFalse(processed_path.exists())
+
+    def test_preprocessed_file_is_deleted_after_ocr_failure(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as handle:
+            processed_path = Path(handle.name)
+        model = Mock()
+        model.ocr.side_effect = RuntimeError("decoder internals")
+        with (
+            patch.object(receipt_service, "preprocess_receipt_image", return_value=processed_path),
+            patch.object(receipt_service, "get_receipt_ocr_model", return_value=model),
+        ):
+            with self.assertRaises(receipt_service.ReceiptOcrUnavailableError):
+                receipt_service.extract_receipt(Path("unused.jpg"))
+        self.assertFalse(processed_path.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

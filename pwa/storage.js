@@ -2,6 +2,7 @@ export const HISTORY_KEY = "catatkas.transactions.v1";
 const LEGACY_HISTORY_KEY = "accountingdec.transactions.v1";
 export const MAX_HISTORY_ITEMS = 50;
 export const MAX_TEXT_LENGTH = 500;
+export const MAX_RECEIPT_ITEMS = 50;
 
 const TRANSACTION_TYPES = new Set(["income", "expense"]);
 
@@ -17,6 +18,48 @@ function nullablePositiveNumber(value, fieldName) {
     throw new Error(`${fieldName} harus berupa angka positif.`);
   }
   return number;
+}
+
+function nullableNonNegativeNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function normalizeReceiptItem(value) {
+  if (!value || typeof value !== "object") return null;
+  const itemName = nullableText(value.item_name);
+  if (!itemName) return null;
+  const quantity = nullableNonNegativeNumber(value.quantity);
+  const unitPrice = nullableNonNegativeNumber(value.unit_price);
+  const lineTotal = nullableNonNegativeNumber(value.line_total);
+  const confidence = nullableNonNegativeNumber(value.confidence);
+  return {
+    item_name: itemName,
+    quantity: quantity && quantity > 0 ? quantity : null,
+    unit: nullableText(value.unit),
+    unit_price: unitPrice,
+    line_total: lineTotal,
+    confidence: confidence === null ? null : Math.min(confidence, 1),
+  };
+}
+
+function normalizeReceipt(value, confirmedTotal = null) {
+  if (!value || typeof value !== "object") return null;
+  const items = Array.isArray(value.items)
+    ? value.items.slice(0, MAX_RECEIPT_ITEMS).map(normalizeReceiptItem).filter(Boolean)
+    : [];
+  const detectedTotal = nullableNonNegativeNumber(value.total);
+  return {
+    merchant_name: nullableText(value.merchant_name),
+    receipt_number: nullableText(value.receipt_number),
+    subtotal: nullableNonNegativeNumber(value.subtotal),
+    discount: nullableNonNegativeNumber(value.discount),
+    tax: nullableNonNegativeNumber(value.tax),
+    service_charge: nullableNonNegativeNumber(value.service_charge),
+    total: nullableNonNegativeNumber(confirmedTotal) ?? detectedTotal,
+    items,
+  };
 }
 
 function validDate(value) {
@@ -40,7 +83,7 @@ function isTransactionData(value) {
 }
 
 function normalizeStoredRecord(value, index, now) {
-  const source = ["text", "voice", "manual"].includes(value.source) ? value.source : "text";
+  const source = ["text", "voice", "manual", "receipt"].includes(value.source) ? value.source : "text";
   const legacyInput = nullableText(value.original_text);
   return {
     id: nullableText(value.id) || newRecordId(new Date(now.getTime() + index)),
@@ -49,6 +92,7 @@ function normalizeStoredRecord(value, index, now) {
     transcript: source === "voice" ? nullableText(value.transcript) || legacyInput : null,
     normalized_text: source === "voice" ? nullableText(value.normalized_text) : null,
     note: nullableText(value.note) || (source === "manual" ? legacyInput : null),
+    receipt: source === "receipt" ? normalizeReceipt(value.receipt, value.total_price) : null,
     item_name: nullableText(value.item_name),
     quantity: value.quantity === null || value.quantity === undefined || value.quantity === ""
       ? null
@@ -89,7 +133,11 @@ export function loadHistory(storage = localStorage, options = {}) {
 }
 
 export function saveHistory(history, storage = localStorage) {
-  const safeHistory = history.filter(isTransactionData).slice(0, MAX_HISTORY_ITEMS);
+  const now = new Date();
+  const safeHistory = history
+    .filter(isTransactionData)
+    .slice(0, MAX_HISTORY_ITEMS)
+    .map((record, index) => normalizeStoredRecord(record, index, now));
   storage.setItem(HISTORY_KEY, JSON.stringify(safeHistory));
   return safeHistory;
 }
@@ -126,6 +174,7 @@ export function createManualTransaction(input, options = {}) {
     original_text: null,
     transcript: null,
     normalized_text: null,
+    receipt: null,
     ...fields,
     created_at: now.toISOString(),
     updated_at: null,
@@ -177,6 +226,7 @@ export function recordSuccessfulResponse(response, source, originalText, options
     transcript: isVoice ? nullableText(response.transcript || originalText) : null,
     normalized_text: isVoice ? nullableText(response.normalized_text) : null,
     note: null,
+    receipt: null,
     item_name: nullableText(data.item_name),
     quantity: data.quantity ?? null,
     unit: nullableText(data.unit),
@@ -191,6 +241,47 @@ export function recordSuccessfulResponse(response, source, originalText, options
 
   const history = saveHistory([record, ...loadHistory(storage, { now })], storage);
   return { record, history };
+}
+
+export function createReceiptTransaction(response, confirmation, options = {}) {
+  if (
+    !response
+    || response.success !== true
+    || response.source !== "receipt"
+    || !response.data?.receipt
+  ) {
+    throw new Error("Hasil nota tidak valid dan tidak dapat disimpan.");
+  }
+
+  const storage = options.storage || localStorage;
+  const now = options.now || new Date();
+  const fields = validateEditableTransaction({
+    transaction_type: "expense",
+    date: confirmation.date,
+    total_price: confirmation.total_price,
+    item_name: response.data.item_name,
+    quantity: response.data.quantity,
+    unit: response.data.unit,
+    note: null,
+  });
+  const receipt = normalizeReceipt(response.data.receipt, fields.total_price);
+  if (!receipt) throw new Error("Rincian nota tidak valid.");
+
+  const record = {
+    id: options.idFactory?.() || newRecordId(now),
+    source: "receipt",
+    original_text: null,
+    transcript: null,
+    normalized_text: null,
+    note: null,
+    receipt,
+    ...fields,
+    transaction_type: "expense",
+    created_at: now.toISOString(),
+    updated_at: null,
+  };
+  const history = saveHistory([record, ...loadHistory(storage, { now })], storage);
+  return { record: history[0], history };
 }
 
 export function calculateSummary(history) {

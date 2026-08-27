@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#EFF5F9">
-    <meta name="description" content="Pencatat transaksi UMKM melalui teks dan suara.">
+    <meta name="description" content="Pencatat transaksi UMKM melalui teks, suara, foto nota, dan input manual.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="CatatKas">
@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=15">
+    <link rel="stylesheet" href="/styles.css?v=16">
   </head>
   <body>
     <div class="app-shell">
@@ -118,6 +118,7 @@
             <div class="tabs" role="tablist" aria-label="Metode pencatatan">
               <button class="tab-button is-active" id="text-tab" type="button" role="tab" aria-selected="true" aria-controls="text-panel">Teks</button>
               <button class="tab-button" id="voice-tab" type="button" role="tab" aria-selected="false" aria-controls="voice-panel" tabindex="-1">Suara</button>
+              <button class="tab-button" id="receipt-tab" type="button" role="tab" aria-selected="false" aria-controls="receipt-panel" tabindex="-1">Foto nota</button>
             </div>
 
             <div class="tab-panel" id="text-panel" role="tabpanel" aria-labelledby="text-tab">
@@ -151,6 +152,36 @@
                 </div>
                 <p class="voice-help" id="voice-help">Durasi maksimal 30 detik. Audio tidak disimpan setelah diproses.</p>
               </div>
+            </div>
+
+            <div class="tab-panel" id="receipt-panel" role="tabpanel" aria-labelledby="receipt-tab" hidden>
+              <form id="receipt-form" class="receipt-capture">
+                <input
+                  class="visually-hidden"
+                  id="receipt-file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                >
+                <label class="receipt-picker" for="receipt-file">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h3l1.5-2h7L17 7h3v12H4z"></path>
+                    <circle cx="12" cy="13" r="3.5"></circle>
+                  </svg>
+                  <strong>Ambil foto atau pilih dari galeri</strong>
+                  <span>JPEG, PNG, atau WebP · maksimal 10 MB</span>
+                </label>
+                <div class="receipt-preview" id="receipt-preview" hidden>
+                  <img id="receipt-preview-image" alt="Pratinjau foto nota yang dipilih">
+                  <button class="button button-secondary compact-button" id="receipt-change-button" type="button">Ganti foto</button>
+                </div>
+                <p class="receipt-file-name" id="receipt-file-name">Belum ada foto dipilih.</p>
+                <button class="button button-primary submit-button" id="receipt-submit" type="submit" disabled>
+                  <span class="button-label">Scan nota</span>
+                  <span class="spinner" aria-hidden="true"></span>
+                </button>
+                <p class="voice-help">Hasil wajib dikonfirmasi. Foto tidak disimpan setelah selesai diproses.</p>
+              </form>
             </div>
 
             <div class="status-message" id="request-status" role="status" aria-live="polite"></div>
@@ -277,7 +308,7 @@
       <div class="dialog-content">
         <section>
           <h3>Penyimpanan</h3>
-          <p>Maksimal 50 transaksi disimpan di browser ini. Rekaman suara dan output mentah model tidak pernah disimpan.</p>
+          <p>Maksimal 50 transaksi disimpan di browser ini. Rekaman suara, foto nota, teks OCR mentah, dan output mentah model tidak pernah disimpan.</p>
         </section>
         <section>
           <h3>Tampilan</h3>
@@ -289,7 +320,7 @@
         </section>
         <section>
           <h3>Koneksi</h3>
-          <p>Pencatatan membutuhkan server CatatKas. Aplikasi tidak menjalankan Llama atau Whisper secara offline.</p>
+          <p>Pencatatan membutuhkan server CatatKas. Aplikasi tidak menjalankan Llama, Whisper, atau PaddleOCR secara offline.</p>
         </section>
       </div>
       <div class="dialog-actions">
@@ -324,11 +355,73 @@
         <h3>Teks normalisasi</h3>
         <p id="detail-normalized-text">—</p>
       </section>
+      <section class="detail-text-section receipt-detail-section" id="detail-receipt-section" hidden>
+        <h3>Rincian nota</h3>
+        <dl class="receipt-metadata-grid">
+          <div><dt>Nama toko</dt><dd id="detail-receipt-merchant">—</dd></div>
+          <div><dt>Nomor nota</dt><dd id="detail-receipt-number">—</dd></div>
+          <div><dt>Subtotal</dt><dd id="detail-receipt-subtotal">—</dd></div>
+          <div><dt>Diskon</dt><dd id="detail-receipt-discount">—</dd></div>
+          <div><dt>Pajak</dt><dd id="detail-receipt-tax">—</dd></div>
+          <div><dt>Biaya layanan</dt><dd id="detail-receipt-service">—</dd></div>
+        </dl>
+        <h3>Barang pada nota</h3>
+        <ul class="receipt-item-list" id="detail-receipt-items"></ul>
+      </section>
       <div class="dialog-actions detail-actions">
         <button class="button button-danger" id="delete-transaction-button" type="button">Hapus</button>
         <button class="button button-secondary" id="edit-transaction-button" type="button">Edit</button>
         <button class="button button-primary" id="done-detail-button" type="button">Tutup</button>
       </div>
+    </dialog>
+
+    <dialog class="settings-dialog receipt-confirm-dialog" id="receipt-confirm-dialog" aria-labelledby="receipt-confirm-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Konfirmasi Scan Nota</p>
+          <h2 id="receipt-confirm-title">Periksa hasil nota</h2>
+        </div>
+        <button class="icon-button" id="close-receipt-confirm-button" type="button" aria-label="Batalkan hasil Scan Nota">×</button>
+      </div>
+      <p class="receipt-privacy-note">Foto hanya digunakan selama proses OCR dan tidak disimpan oleh CatatKas.</p>
+      <dl class="receipt-metadata-grid receipt-confirm-metadata">
+        <div><dt>Nama toko</dt><dd id="receipt-confirm-merchant">—</dd></div>
+        <div><dt>Nomor nota</dt><dd id="receipt-confirm-number">—</dd></div>
+      </dl>
+      <form id="receipt-confirm-form">
+        <div class="manual-form-grid">
+          <div class="form-field">
+            <label for="receipt-confirm-date">Tanggal transaksi</label>
+            <input id="receipt-confirm-date" type="date" required>
+          </div>
+          <div class="form-field manual-price-field">
+            <label for="receipt-confirm-total">Total akhir</label>
+            <input id="receipt-confirm-total" type="number" min="1" step="1" inputmode="numeric" required>
+          </div>
+        </div>
+        <div class="receipt-candidates" id="receipt-total-candidates" hidden>
+          <strong>Kandidat total</strong>
+          <div id="receipt-total-candidate-buttons"></div>
+        </div>
+        <section class="receipt-warning-box" id="receipt-warning-box" hidden>
+          <strong>Perlu diperiksa</strong>
+          <ul id="receipt-warning-list"></ul>
+        </section>
+        <section class="receipt-confirm-items">
+          <h3>Rincian barang</h3>
+          <ul class="receipt-item-list" id="receipt-confirm-items"></ul>
+          <p id="receipt-confirm-empty-items">Rincian barang tidak terbaca. Nota tetap dapat disimpan sebagai satu transaksi.</p>
+        </section>
+        <details class="ocr-preview">
+          <summary>Lihat teks OCR sementara</summary>
+          <pre id="receipt-ocr-text"></pre>
+        </details>
+        <p class="field-error" id="receipt-confirm-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="receipt-retake-button" type="button">Foto ulang</button>
+          <button class="button button-primary" type="submit">Simpan transaksi</button>
+        </div>
+      </form>
     </dialog>
 
     <dialog class="settings-dialog transaction-form-dialog" id="transaction-form-dialog" aria-labelledby="transaction-form-title">
@@ -381,6 +474,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/app.js?v=15"></script>
+    <script type="module" src="/app.js?v=17"></script>
   </body>
 </html>

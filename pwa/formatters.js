@@ -45,7 +45,13 @@ export function presentTransaction(record, localDate) {
     item: formatOptional(record.item_name),
     quantity: formatOptional(record.quantity),
     unit: formatOptional(record.unit),
-    source: record.source === "voice" ? "Suara" : record.source === "manual" ? "Manual" : "Teks",
+    source: record.source === "voice"
+      ? "Suara"
+      : record.source === "manual"
+        ? "Manual"
+        : record.source === "receipt"
+          ? "Foto nota"
+          : "Teks",
   };
 }
 
@@ -69,6 +75,9 @@ export function presentTransactionDetail(record, localDate) {
   } else if (record.source === "manual") {
     originalLabel = "Catatan";
     originalText = record.note;
+  } else if (record.source === "receipt") {
+    originalLabel = "Sumber nota";
+    originalText = record.receipt?.merchant_name;
   }
   return {
     ...view,

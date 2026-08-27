@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ApiError, extractAudio, extractText, getLocalReferenceDate } from "../../pwa/api.js";
+import {
+  ApiError,
+  extractAudio,
+  extractReceipt,
+  extractText,
+  getLocalReferenceDate,
+} from "../../pwa/api.js";
 
 const successfulPayload = {
   success: true,
@@ -77,4 +83,42 @@ test("status 422 memakai pesan API dan tidak menghasilkan data palsu", async () 
     extractText("cuaca hari ini", { fetchImpl }),
     (error) => error instanceof ApiError && error.status === 422 && error.message.includes("di luar konteks"),
   );
+});
+
+test("foto nota dikirim sebagai FormData ke endpoint baru", async () => {
+  let captured;
+  const payload = {
+    success: true,
+    source: "receipt",
+    requires_confirmation: true,
+    data: {
+      item_name: null,
+      quantity: null,
+      unit: null,
+      total_price: 180000,
+      date: "2026-08-26",
+      transaction_type: "expense",
+      receipt: { merchant_name: "Toko Makmur", items: [] },
+    },
+  };
+  const fetchImpl = async (url, options) => {
+    captured = { url, options };
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const file = new File(["image"], "nota.jpg", { type: "image/jpeg" });
+
+  const response = await extractReceipt(file, {
+    fetchImpl,
+    referenceDate: "2026-08-26",
+  });
+
+  assert.equal(response.requires_confirmation, true);
+  assert.equal(captured.url, "/extract/receipt");
+  assert.equal(captured.options.method, "POST");
+  assert.ok(captured.options.body instanceof FormData);
+  assert.equal(captured.options.body.get("reference_date"), "2026-08-26");
+  assert.equal(captured.options.headers, undefined);
 });

@@ -67,3 +67,54 @@ WHISPER_VAD_FILTER = os.getenv("WHISPER_VAD_FILTER", "true").lower() in {
 # Batas request audio. Nilai environment variable dinyatakan dalam MB.
 AUDIO_MAX_SIZE_MB = int(os.getenv("AUDIO_MAX_SIZE_MB", "10"))
 AUDIO_MAX_SIZE_BYTES = AUDIO_MAX_SIZE_MB * 1024 * 1024
+
+# ---- Receipt OCR (PaddleOCR) ----
+# OCR nota dimuat secara lazy. Paket CPU digunakan agar tidak mengambil VRAM Llama.
+RECEIPT_MAX_SIZE_MB = int(os.getenv("RECEIPT_MAX_SIZE_MB", "10"))
+RECEIPT_MAX_SIZE_BYTES = RECEIPT_MAX_SIZE_MB * 1024 * 1024
+RECEIPT_OCR_LANGUAGE = os.getenv("RECEIPT_OCR_LANGUAGE", "id")
+RECEIPT_MIN_CONFIDENCE = float(os.getenv("RECEIPT_MIN_CONFIDENCE", "0.50"))
+RECEIPT_MAX_IMAGE_DIMENSION = int(
+    os.getenv("RECEIPT_MAX_IMAGE_DIMENSION", "2400")
+)
+RECEIPT_MAX_IMAGE_PIXELS = int(os.getenv("RECEIPT_MAX_IMAGE_PIXELS", "25000000"))
+
+# ---- Receipt Soft Prompt (Llama + OCR text) ----
+# Adapter nota terpisah dari adapter transaksi dan dimuat lazy pada base model yang sama.
+RECEIPT_ADAPTER_OUTPUT_DIR = os.getenv(
+    "RECEIPT_ADAPTER_OUTPUT_DIR",
+    "adapters/soft-prompt-nota",
+)
+RECEIPT_TRAIN_DATA_PATH = os.getenv(
+    "RECEIPT_TRAIN_DATA_PATH",
+    "data/processed/receipt-train.jsonl",
+)
+RECEIPT_VALIDATION_DATA_PATH = os.getenv(
+    "RECEIPT_VALIDATION_DATA_PATH",
+    "data/processed/receipt-validation.jsonl",
+)
+RECEIPT_EVAL_DATA_PATH = os.getenv(
+    "RECEIPT_EVAL_DATA_PATH",
+    "data/processed/receipt-eval.jsonl",
+)
+RECEIPT_SOFT_PROMPT_CONTRACT_VERSION = int(
+    os.getenv("RECEIPT_SOFT_PROMPT_CONTRACT_VERSION", "1")
+)
+RECEIPT_LLM_ENABLED = os.getenv("RECEIPT_LLM_ENABLED", "true").lower() in {
+    "1", "true", "yes", "on",
+}
+RECEIPT_RULE_FALLBACK_ENABLED = os.getenv(
+    "RECEIPT_RULE_FALLBACK_ENABLED",
+    "true",
+).lower() in {"1", "true", "yes", "on"}
+RECEIPT_PROMPT_TUNING_INIT_TEXT = os.getenv(
+    "RECEIPT_PROMPT_TUNING_INIT_TEXT",
+    "Ekstrak teks OCR nota UMKM menjadi satu JSON nota terstruktur tanpa mengarang data.",
+)
+RECEIPT_MAX_SEQ_LENGTH = int(os.getenv("RECEIPT_MAX_SEQ_LENGTH", "768"))
+RECEIPT_MAX_NEW_TOKENS = int(os.getenv("RECEIPT_MAX_NEW_TOKENS", "768"))
+RECEIPT_TRAIN_BATCH_SIZE = int(os.getenv("RECEIPT_TRAIN_BATCH_SIZE", "1"))
+RECEIPT_GRADIENT_ACCUMULATION_STEPS = int(
+    os.getenv("RECEIPT_GRADIENT_ACCUMULATION_STEPS", "8")
+)
+RECEIPT_MIN_FREE_GPU_GB = float(os.getenv("RECEIPT_MIN_FREE_GPU_GB", "4.5"))

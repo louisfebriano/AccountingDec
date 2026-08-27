@@ -25,6 +25,24 @@ EXPLICIT_EVALUATION_INSTRUCTION = (
     "menjawab."
 )
 
+RECEIPT_INSTRUCTION = (
+    "Input berasal dari OCR nota dan mungkin mengandung kesalahan karakter. "
+    "Perhatikan line break serta urutan baris. Ekstrak merchant, nomor nota, "
+    "tanggal, items, quantity, unit, harga, subtotal, diskon, pajak, biaya "
+    "layanan, dan total. Jawab hanya dengan satu objek JSON valid. Gunakan null "
+    "jika informasi tidak tersedia dan jangan menambahkan barang yang tidak ada "
+    "pada OCR. Nominal harus berupa integer rupiah tanpa simbol mata uang. "
+    "Satu nota adalah satu transaksi expense dan items bukan transaksi terpisah."
+)
+
+RECEIPT_PROMPT_FORMAT = (
+    "INSTRUCTION: {instruction}\n"
+    "REFERENCE_DATE: {reference_date}\n"
+    "SOURCE: receipt_ocr\n"
+    "OCR_TEXT:\n{ocr_text}\n"
+    "JSON:"
+)
+
 FEW_SHOT_EXAMPLES = [
     {
         "input": "Kemarin beli Gas 3kg sebanyak 10 tabung, totalnya 180rb",
@@ -59,6 +77,18 @@ def build_inference_prompt(user_input: str, reference_date: date) -> str:
     return (
         f"REFERENCE_DATE: {reference_date.isoformat()}\n"
         f"Kalimat: {user_input}\nJSON:"
+    )
+
+
+def build_receipt_prompt(ocr_text: str, reference_date: date) -> str:
+    """Bangun prompt OCR nota yang identik untuk training dan inference."""
+    if not isinstance(ocr_text, str) or not ocr_text.strip():
+        raise ValueError("OCR_TEXT harus berupa teks non-kosong.")
+    normalized_ocr = ocr_text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    return RECEIPT_PROMPT_FORMAT.format(
+        instruction=RECEIPT_INSTRUCTION,
+        reference_date=reference_date.isoformat(),
+        ocr_text=normalized_ocr,
     )
 
 

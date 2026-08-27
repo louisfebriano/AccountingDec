@@ -1,29 +1,30 @@
-import { ApiError, extractAudio, extractText, getLocalReferenceDate } from "/api.js?v=15";
+import { ApiError, extractAudio, extractReceipt, extractText, getLocalReferenceDate } from "/api.js?v=16";
 import {
   aggregateTransactionsByPeriod,
   describeChartPoint,
   describePeriodInsight,
   renderTransactionChart,
-} from "/chart.js?v=15";
-import { filterTransactionsByPeriod } from "/filters.js?v=15";
+} from "/chart.js?v=16";
+import { filterTransactionsByPeriod } from "/filters.js?v=16";
 import {
   EMPTY_VALUE,
   formatRupiah,
   presentTransaction,
   presentTransactionDetail,
-} from "/formatters.js?v=15";
-import { RecorderSession } from "/recorder.js?v=15";
-import { RequestGate } from "/request-gate.js?v=15";
+} from "/formatters.js?v=16";
+import { RecorderSession } from "/recorder.js?v=16";
+import { RequestGate } from "/request-gate.js?v=16";
 import {
   calculateSummary,
   clearHistory,
   createManualTransaction,
+  createReceiptTransaction,
   deleteTransaction,
   loadHistory,
   recordSuccessfulResponse,
   updateTransaction,
-} from "/storage.js?v=15";
-import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=15";
+} from "/storage.js?v=16";
+import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=16";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -41,6 +42,7 @@ const elements = {
   tabs: [...document.querySelectorAll('[role="tab"]')],
   textPanel: $("#text-panel"),
   voicePanel: $("#voice-panel"),
+  receiptPanel: $("#receipt-panel"),
   textForm: $("#text-form"),
   textInput: $("#transaction-text"),
   characterCount: $("#character-count"),
@@ -51,6 +53,13 @@ const elements = {
   recordTimer: $("#record-timer"),
   voiceStatus: $("#voice-status"),
   voiceHelp: $("#voice-help"),
+  receiptForm: $("#receipt-form"),
+  receiptFile: $("#receipt-file"),
+  receiptSubmit: $("#receipt-submit"),
+  receiptChangeButton: $("#receipt-change-button"),
+  receiptPreview: $("#receipt-preview"),
+  receiptPreviewImage: $("#receipt-preview-image"),
+  receiptFileName: $("#receipt-file-name"),
   requestStatus: $("#request-status"),
   resultCard: $("#result-card"),
   resultType: $("#result-type"),
@@ -114,6 +123,30 @@ const elements = {
   detailOriginalText: $("#detail-original-text"),
   detailNormalizedSection: $("#detail-normalized-section"),
   detailNormalizedText: $("#detail-normalized-text"),
+  detailReceiptSection: $("#detail-receipt-section"),
+  detailReceiptMerchant: $("#detail-receipt-merchant"),
+  detailReceiptNumber: $("#detail-receipt-number"),
+  detailReceiptSubtotal: $("#detail-receipt-subtotal"),
+  detailReceiptDiscount: $("#detail-receipt-discount"),
+  detailReceiptTax: $("#detail-receipt-tax"),
+  detailReceiptService: $("#detail-receipt-service"),
+  detailReceiptItems: $("#detail-receipt-items"),
+  receiptConfirmDialog: $("#receipt-confirm-dialog"),
+  closeReceiptConfirmButton: $("#close-receipt-confirm-button"),
+  receiptConfirmForm: $("#receipt-confirm-form"),
+  receiptConfirmMerchant: $("#receipt-confirm-merchant"),
+  receiptConfirmNumber: $("#receipt-confirm-number"),
+  receiptConfirmDate: $("#receipt-confirm-date"),
+  receiptConfirmTotal: $("#receipt-confirm-total"),
+  receiptTotalCandidates: $("#receipt-total-candidates"),
+  receiptTotalCandidateButtons: $("#receipt-total-candidate-buttons"),
+  receiptWarningBox: $("#receipt-warning-box"),
+  receiptWarningList: $("#receipt-warning-list"),
+  receiptConfirmItems: $("#receipt-confirm-items"),
+  receiptConfirmEmptyItems: $("#receipt-confirm-empty-items"),
+  receiptOcrText: $("#receipt-ocr-text"),
+  receiptConfirmError: $("#receipt-confirm-error"),
+  receiptRetakeButton: $("#receipt-retake-button"),
   transactionFormDialog: $("#transaction-form-dialog"),
   transactionFormTitle: $("#transaction-form-title"),
   closeTransactionFormButton: $("#close-transaction-form-button"),
@@ -139,6 +172,9 @@ let timerInterval = null;
 let limitTimeout = null;
 let recordingStartedAt = 0;
 let recordingActive = false;
+let selectedReceiptFile = null;
+let receiptPreviewUrl = null;
+let pendingReceipt = null;
 let activeTheme = applyTheme(loadTheme());
 let chartTooltipPinned = false;
 
@@ -176,6 +212,9 @@ function setBusy(busy, mode = "text") {
   elements.recordButton.disabled = busy || !navigator.onLine || !recorder.supported;
   elements.recordVisual.disabled = !recordingActive
     && (busy || !navigator.onLine || !recorder.supported);
+  elements.receiptFile.disabled = busy;
+  elements.receiptSubmit.disabled = busy || !navigator.onLine || !selectedReceiptFile;
+  elements.receiptSubmit.classList.toggle("is-loading", busy && mode === "receipt");
   elements.tabs.forEach((tab) => { tab.disabled = busy; });
 }
 
@@ -194,7 +233,7 @@ function updateConnection() {
   elements.connectionLabel.textContent = online ? "Online" : "Offline";
   elements.offlineBanner.hidden = online;
   setBusy(gate.busy);
-  if (!online) setStatus("Koneksi server diperlukan untuk input teks atau suara. Transaksi manual tetap tersedia.", "warning");
+  if (!online) setStatus("Koneksi server diperlukan untuk input teks, suara, atau Scan Nota. Transaksi manual tetap tersedia.", "warning");
 }
 
 function switchTab(selectedTab) {
@@ -206,9 +245,13 @@ function switchTab(selectedTab) {
   });
   elements.textPanel.hidden = selectedTab.id !== "text-tab";
   elements.voicePanel.hidden = selectedTab.id !== "voice-tab";
+  elements.receiptPanel.hidden = selectedTab.id !== "receipt-tab";
 }
 
 function transactionTitle(transaction) {
+  if (transaction.source === "receipt" && transaction.receipt?.merchant_name) {
+    return `Belanja di ${transaction.receipt.merchant_name}`;
+  }
   if (transaction.item_name) return transaction.item_name;
   if (transaction.transaction_type === "income") return "Pemasukan umum";
   if (transaction.transaction_type === "expense") return "Pengeluaran umum";
@@ -241,7 +284,7 @@ function renderHistory(transactions) {
 
   if (history.length === 0) {
     elements.emptyHistoryTitle.textContent = "Belum ada transaksi";
-    elements.emptyHistoryDescription.textContent = "Tambahkan transaksi melalui teks, suara, atau form manual.";
+    elements.emptyHistoryDescription.textContent = "Tambahkan transaksi melalui teks, suara, Foto nota, atau form manual.";
   } else if (transactions.length === 0) {
     elements.emptyHistoryTitle.textContent = "Tidak ada transaksi pada periode ini";
     elements.emptyHistoryDescription.textContent = "Ubah filter periode atau pilih Semua untuk melihat riwayat lainnya.";
@@ -365,6 +408,9 @@ function renderAll() {
 function resultOriginalText(record) {
   if (record.source === "voice") return record.transcript;
   if (record.source === "manual") return record.note;
+  if (record.source === "receipt") return record.receipt?.merchant_name
+    ? `Belanja di ${record.receipt.merchant_name}`
+    : "Hasil Scan Nota";
   return record.original_text;
 }
 
@@ -396,9 +442,9 @@ function humanizeError(error, mode = "text") {
   if (error instanceof ApiError) return error.message;
   if (error?.name === "NotAllowedError") return "Izin mikrofon ditolak. Izinkan mikrofon melalui pengaturan browser.";
   if (error?.name === "NotFoundError") return "Mikrofon tidak ditemukan pada perangkat ini.";
-  return mode === "voice"
-    ? "Rekaman tidak dapat diproses. Silakan coba kembali."
-    : "Transaksi tidak dapat diproses. Silakan coba kembali.";
+  if (mode === "voice") return "Rekaman tidak dapat diproses. Silakan coba kembali.";
+  if (mode === "receipt") return "Foto nota tidak dapat diproses. Silakan coba kembali.";
+  return "Transaksi tidak dapat diproses. Silakan coba kembali.";
 }
 
 elements.textForm.addEventListener("submit", async (event) => {
@@ -428,6 +474,209 @@ elements.textForm.addEventListener("submit", async (event) => {
 
 elements.textInput.addEventListener("input", () => {
   elements.characterCount.textContent = String(elements.textInput.value.length);
+});
+
+const RECEIPT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const RECEIPT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+
+function clearReceiptPreview() {
+  if (receiptPreviewUrl) URL.revokeObjectURL(receiptPreviewUrl);
+  receiptPreviewUrl = null;
+  elements.receiptPreviewImage.removeAttribute("src");
+  elements.receiptPreview.hidden = true;
+}
+
+function clearReceiptConfirmation() {
+  pendingReceipt = null;
+  elements.receiptOcrText.textContent = "";
+  elements.receiptWarningList.replaceChildren();
+  elements.receiptConfirmItems.replaceChildren();
+  elements.receiptTotalCandidateButtons.replaceChildren();
+  elements.receiptConfirmError.textContent = "";
+}
+
+function resetReceiptSelection() {
+  clearReceiptConfirmation();
+  clearReceiptPreview();
+  selectedReceiptFile = null;
+  elements.receiptFile.value = "";
+  elements.receiptFileName.textContent = "Belum ada foto dipilih.";
+  elements.receiptSubmit.disabled = true;
+}
+
+function releaseProcessedReceiptFile() {
+  clearReceiptPreview();
+  selectedReceiptFile = null;
+  elements.receiptFile.value = "";
+  elements.receiptFileName.textContent = "Foto selesai diproses dan dilepas dari browser.";
+  elements.receiptSubmit.disabled = true;
+}
+
+function receiptItemDescription(item) {
+  const quantity = item.quantity == null ? "" : `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
+  const unitPrice = item.unit_price == null
+    ? ""
+    : quantity
+      ? ` × ${formatRupiah(item.unit_price)}`
+      : `Harga ${formatRupiah(item.unit_price)}`;
+  return `${quantity}${unitPrice}`.trim() || "Rincian jumlah tidak terbaca";
+}
+
+function appendReceiptItems(container, items) {
+  container.replaceChildren();
+  items.forEach((item) => {
+    const row = document.createElement("li");
+    const label = document.createElement("strong");
+    label.textContent = item.item_name || "Barang tanpa nama";
+    const value = document.createElement("span");
+    const total = item.line_total == null ? "—" : formatRupiah(item.line_total);
+    value.textContent = `${receiptItemDescription(item)} · ${total}`;
+    row.append(label, value);
+    container.append(row);
+  });
+}
+
+function renderReceiptConfirmation(response) {
+  pendingReceipt = response;
+  const receipt = response.data.receipt;
+  const items = Array.isArray(receipt.items) ? receipt.items : [];
+  const warnings = Array.isArray(receipt.warnings) ? receipt.warnings : [];
+  const candidates = [...new Set((response.total_candidates || []).map(Number).filter(Number.isFinite))];
+
+  elements.receiptConfirmMerchant.textContent = receipt.merchant_name || EMPTY_VALUE;
+  elements.receiptConfirmNumber.textContent = receipt.receipt_number || EMPTY_VALUE;
+  elements.receiptConfirmDate.value = response.data.date || "";
+  elements.receiptConfirmTotal.value = response.data.total_price || candidates[0] || "";
+  elements.receiptConfirmError.textContent = "";
+  elements.receiptOcrText.textContent = response.ocr_text || "";
+
+  elements.receiptTotalCandidateButtons.replaceChildren();
+  candidates.forEach((candidate) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "receipt-candidate-button";
+    button.textContent = formatRupiah(candidate);
+    button.addEventListener("click", () => {
+      elements.receiptConfirmTotal.value = String(candidate);
+    });
+    elements.receiptTotalCandidateButtons.append(button);
+  });
+  elements.receiptTotalCandidates.hidden = candidates.length < 2;
+
+  elements.receiptWarningList.replaceChildren();
+  warnings.forEach((warning) => {
+    const item = document.createElement("li");
+    item.textContent = warning;
+    elements.receiptWarningList.append(item);
+  });
+  elements.receiptWarningBox.hidden = warnings.length === 0;
+  appendReceiptItems(elements.receiptConfirmItems, items);
+  elements.receiptConfirmEmptyItems.hidden = items.length > 0;
+  showDialog(elements.receiptConfirmDialog);
+}
+
+elements.receiptFile.addEventListener("change", () => {
+  const file = elements.receiptFile.files?.[0] || null;
+  clearReceiptPreview();
+  clearReceiptConfirmation();
+  selectedReceiptFile = null;
+
+  if (!file) {
+    elements.receiptFileName.textContent = "Belum ada foto dipilih.";
+    elements.receiptSubmit.disabled = true;
+    return;
+  }
+  if (!RECEIPT_TYPES.has(file.type)) {
+    elements.receiptFile.value = "";
+    elements.receiptFileName.textContent = "Format tidak didukung. Pilih JPEG, PNG, atau WebP.";
+    setStatus("Format foto nota tidak didukung.", "error");
+    return;
+  }
+  if (file.size === 0 || file.size > RECEIPT_MAX_SIZE_BYTES) {
+    elements.receiptFile.value = "";
+    elements.receiptFileName.textContent = file.size === 0
+      ? "File foto kosong."
+      : "Ukuran foto melebihi 10 MB.";
+    setStatus(elements.receiptFileName.textContent, "error");
+    return;
+  }
+
+  selectedReceiptFile = file;
+  receiptPreviewUrl = URL.createObjectURL(file);
+  elements.receiptPreviewImage.src = receiptPreviewUrl;
+  elements.receiptPreview.hidden = false;
+  elements.receiptFileName.textContent = file.name;
+  elements.receiptSubmit.disabled = !navigator.onLine;
+  setStatus("Foto siap dipindai.");
+});
+
+elements.receiptChangeButton.addEventListener("click", () => elements.receiptFile.click());
+
+elements.receiptForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!selectedReceiptFile) {
+    setStatus("Pilih foto nota terlebih dahulu.", "error");
+    return;
+  }
+  if (!navigator.onLine) {
+    setStatus("Koneksi server diperlukan untuk Scan Nota.", "error");
+    return;
+  }
+
+  const outcome = await gate.run(async () => {
+    setBusy(true, "receipt");
+    setStatus("Foto nota sedang dibaca…");
+    try {
+      const response = await extractReceipt(selectedReceiptFile);
+      releaseProcessedReceiptFile();
+      renderReceiptConfirmation(response);
+      setStatus("Hasil Scan Nota siap dikonfirmasi.", "success");
+    } catch (error) {
+      clearReceiptConfirmation();
+      setStatus(humanizeError(error, "receipt"), "error");
+    } finally {
+      setBusy(false);
+    }
+  });
+  if (outcome.skipped) setStatus("Permintaan sebelumnya masih diproses.", "warning");
+});
+
+function discardReceiptResult() {
+  clearReceiptConfirmation();
+  closeDialog(elements.receiptConfirmDialog);
+}
+
+elements.closeReceiptConfirmButton.addEventListener("click", discardReceiptResult);
+elements.receiptConfirmDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  discardReceiptResult();
+});
+elements.receiptRetakeButton.addEventListener("click", () => {
+  closeDialog(elements.receiptConfirmDialog);
+  resetReceiptSelection();
+  elements.receiptFile.click();
+});
+
+elements.receiptConfirmForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!pendingReceipt) {
+    elements.receiptConfirmError.textContent = "Hasil nota sudah tidak tersedia. Scan ulang foto nota.";
+    return;
+  }
+  try {
+    const saved = createReceiptTransaction(pendingReceipt, {
+      date: elements.receiptConfirmDate.value,
+      total_price: elements.receiptConfirmTotal.value,
+    });
+    history = saved.history;
+    renderResult(saved.record);
+    closeDialog(elements.receiptConfirmDialog);
+    resetReceiptSelection();
+    renderAll();
+    setStatus("Nota dikonfirmasi dan disimpan sebagai satu transaksi pengeluaran.", "success");
+  } catch (error) {
+    elements.receiptConfirmError.textContent = error.message;
+  }
 });
 
 function clearRecordingTimers() {
@@ -565,6 +814,31 @@ function openTransactionDetail(id) {
   elements.detailOriginalText.textContent = view.originalText;
   elements.detailNormalizedText.textContent = view.normalizedText;
   elements.detailNormalizedSection.hidden = record.source !== "voice";
+  elements.detailOriginalSection.hidden = record.source === "receipt";
+  const isReceipt = record.source === "receipt" && record.receipt;
+  elements.detailReceiptSection.hidden = !isReceipt;
+  if (isReceipt) {
+    elements.detailReceiptMerchant.textContent = record.receipt.merchant_name || EMPTY_VALUE;
+    elements.detailReceiptNumber.textContent = record.receipt.receipt_number || EMPTY_VALUE;
+    elements.detailReceiptSubtotal.textContent = record.receipt.subtotal == null
+      ? EMPTY_VALUE
+      : formatRupiah(record.receipt.subtotal);
+    elements.detailReceiptDiscount.textContent = record.receipt.discount == null
+      ? EMPTY_VALUE
+      : formatRupiah(record.receipt.discount);
+    elements.detailReceiptTax.textContent = record.receipt.tax == null
+      ? EMPTY_VALUE
+      : formatRupiah(record.receipt.tax);
+    elements.detailReceiptService.textContent = record.receipt.service_charge == null
+      ? EMPTY_VALUE
+      : formatRupiah(record.receipt.service_charge);
+    appendReceiptItems(elements.detailReceiptItems, record.receipt.items || []);
+    if ((record.receipt.items || []).length === 0) {
+      const empty = document.createElement("li");
+      empty.textContent = "Tidak ada rincian barang yang tersimpan.";
+      elements.detailReceiptItems.append(empty);
+    }
+  }
   showDialog(elements.detailDialog);
 }
 

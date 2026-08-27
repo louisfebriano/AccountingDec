@@ -10,3 +10,5 @@ __pycache__/
 /data/raw/
 
 eval_results.json
+/results/
+/receipt-evaluation-report.json

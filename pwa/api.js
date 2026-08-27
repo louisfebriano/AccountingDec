@@ -80,3 +80,19 @@ export async function extractAudio(blob, options = {}) {
   }
   return readResponse(response);
 }
+
+export async function extractReceipt(file, options = {}) {
+  const fetchImpl = options.fetchImpl || fetch;
+  const referenceDate = options.referenceDate || getLocalReferenceDate();
+  const form = new FormData();
+  form.append("file", file, file.name || "nota.jpg");
+  form.append("reference_date", referenceDate);
+
+  let response;
+  try {
+    response = await fetchImpl("/extract/receipt", { method: "POST", body: form });
+  } catch {
+    throw new ApiError("API Scan Nota tidak dapat dijangkau. Periksa koneksi dan server Anda.");
+  }
+  return readResponse(response);
+}

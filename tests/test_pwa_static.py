@@ -23,7 +23,7 @@ class PwaStaticTests(unittest.TestCase):
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json()["display"], "standalone")
         self.assertEqual(worker.status_code, 200)
-        self.assertIn("catatkas-shell-v15", worker.text)
+        self.assertIn("catatkas-shell-v17", worker.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn("--primary-color: #03bfb5", styles.text)
         self.assertIn("--secondary-color: #018076", styles.text)
@@ -39,6 +39,10 @@ class PwaStaticTests(unittest.TestCase):
         self.assertIn("theme-toggle", home.text)
         self.assertIn('id="record-visual"', home.text)
         self.assertIn('aria-label="Mulai merekam suara"', home.text)
+        self.assertIn('id="receipt-tab"', home.text)
+        self.assertIn('id="receipt-file"', home.text)
+        self.assertIn('capture="environment"', home.text)
+        self.assertIn('id="receipt-confirm-dialog"', home.text)
 
     def test_pwa_icons_have_expected_png_dimensions(self):
         expected = {

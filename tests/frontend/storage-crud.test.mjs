@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   HISTORY_KEY,
+  calculateSummary,
   createManualTransaction,
+  createReceiptTransaction,
   deleteTransaction,
   loadHistory,
   recordSuccessfulResponse,
@@ -128,4 +130,86 @@ test("input teks tetap disebut input asli dan data lama tanpa field baru tetap t
   assert.equal(detail.originalLabel, "Input asli");
   assert.equal(detail.originalText, "jual bakmi 2 porsi 40 ribu");
   assert.doesNotMatch(storage.getItem(HISTORY_KEY), /raw_output|audio|hapus saat migrasi/);
+});
+
+test("satu nota dikonfirmasi sebagai satu transaksi dengan banyak rincian", () => {
+  const storage = new MemoryStorage();
+  const response = {
+    success: true,
+    source: "receipt",
+    ocr_text: "RAW OCR TIDAK DISIMPAN",
+    raw_output: "RAW MODEL TIDAK DISIMPAN",
+    extraction_method: "llama_soft_prompt_receipt",
+    validation: { status: "valid", warnings: [] },
+    image: "FOTO TIDAK DISIMPAN",
+    data: {
+      item_name: null,
+      quantity: null,
+      unit: null,
+      total_price: 80000,
+      date: "2026-08-26",
+      transaction_type: "expense",
+      receipt: {
+        merchant_name: "Toko Makmur",
+        receipt_number: "INV-001",
+        subtotal: 70000,
+        discount: 5000,
+        tax: 10000,
+        service_charge: 5000,
+        total: 80000,
+        warnings: ["transien"],
+        items: [
+          { item_name: "Minyak", quantity: 2, unit: "liter", unit_price: 20000, line_total: 40000, confidence: 0.91 },
+          { item_name: "Beras", quantity: 2, unit: "kg", unit_price: 15000, line_total: 30000, confidence: 0.93 },
+        ],
+      },
+    },
+  };
+
+  assert.equal(loadHistory(storage).length, 0, "hasil OCR belum tersimpan sebelum konfirmasi");
+  const saved = createReceiptTransaction(response, {
+    date: "2026-08-27",
+    total_price: "85000",
+  }, { storage, idFactory: () => "receipt-1" });
+
+  assert.equal(saved.history.length, 1);
+  assert.equal(saved.record.source, "receipt");
+  assert.equal(saved.record.transaction_type, "expense");
+  assert.equal(saved.record.date, "2026-08-27");
+  assert.equal(saved.record.total_price, 85000);
+  assert.equal(saved.record.receipt.total, 85000);
+  assert.equal(saved.record.receipt.items.length, 2);
+  assert.deepEqual(calculateSummary(saved.history), { income: 0, expense: 85000, balance: -85000 });
+
+  const serialized = storage.getItem(HISTORY_KEY);
+  assert.doesNotMatch(serialized, /RAW OCR|RAW MODEL|FOTO TIDAK|ocr_text|raw_output|image|warnings|transien/);
+});
+
+test("edit transaksi induk mempertahankan rincian nota", () => {
+  const storage = new MemoryStorage();
+  const response = {
+    success: true,
+    source: "receipt",
+    data: {
+      total_price: 50000,
+      date: "2026-08-26",
+      receipt: {
+        merchant_name: "Warung Ibu",
+        total: 50000,
+        items: [{ item_name: "Telur", quantity: 2, unit: "kg", line_total: 50000 }],
+      },
+    },
+  };
+  createReceiptTransaction(response, { date: "2026-08-26", total_price: 50000 }, {
+    storage,
+    idFactory: () => "receipt-edit",
+  });
+  const updated = updateTransaction("receipt-edit", manualInput({
+    transaction_type: "expense",
+    date: "2026-08-27",
+    total_price: 55000,
+  }), { storage });
+
+  assert.equal(updated.record.receipt.merchant_name, "Warung Ibu");
+  assert.equal(updated.record.receipt.items[0].item_name, "Telur");
 });
