@@ -77,7 +77,17 @@ RECEIPT_MIN_CONFIDENCE = float(os.getenv("RECEIPT_MIN_CONFIDENCE", "0.50"))
 RECEIPT_MAX_IMAGE_DIMENSION = int(
     os.getenv("RECEIPT_MAX_IMAGE_DIMENSION", "2400")
 )
+RECEIPT_OCR_TARGET_LONG_EDGE = int(
+    os.getenv("RECEIPT_OCR_TARGET_LONG_EDGE", "2000")
+)
 RECEIPT_MAX_IMAGE_PIXELS = int(os.getenv("RECEIPT_MAX_IMAGE_PIXELS", "25000000"))
+RECEIPT_OCR_MULTIPASS = os.getenv("RECEIPT_OCR_MULTIPASS", "true").lower() in {
+    "1", "true", "yes", "on",
+}
+RECEIPT_OCR_DET_BOX_THRESHOLD = float(
+    os.getenv("RECEIPT_OCR_DET_BOX_THRESHOLD", "0.30")
+)
+RECEIPT_OCR_DROP_SCORE = float(os.getenv("RECEIPT_OCR_DROP_SCORE", "0.25"))
 
 # ---- Receipt Soft Prompt (Llama + OCR text) ----
 # Adapter nota terpisah dari adapter transaksi dan dimuat lazy pada base model yang sama.

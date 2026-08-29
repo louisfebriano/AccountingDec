@@ -69,7 +69,11 @@ RECEIPT_MAX_SIZE_MB=10
 RECEIPT_OCR_LANGUAGE=id
 RECEIPT_MIN_CONFIDENCE=0.50
 RECEIPT_MAX_IMAGE_DIMENSION=2400
+RECEIPT_OCR_TARGET_LONG_EDGE=2000
 RECEIPT_MAX_IMAGE_PIXELS=25000000
+RECEIPT_OCR_MULTIPASS=true
+RECEIPT_OCR_DET_BOX_THRESHOLD=0.30
+RECEIPT_OCR_DROP_SCORE=0.25
 RECEIPT_ADAPTER_OUTPUT_DIR=adapters/soft-prompt-nota
 RECEIPT_TRAIN_DATA_PATH=data/processed/receipt-train.jsonl
 RECEIPT_VALIDATION_DATA_PATH=data/processed/receipt-validation.jsonl
@@ -591,13 +595,27 @@ dimigrasikan ketika pertama kali dibaca.
 
 Pilih tab **Foto nota**, ambil foto dengan kamera belakang atau pilih JPEG, PNG, atau
 WebP dari galeri, lalu tekan **Scan nota**. Batas ukuran default adalah 10 MB. Server
-memperbaiki orientasi EXIF, mengubah gambar ke RGB, mengecilkan gambar besar secara
-proporsional, meningkatkan kontras bila diperlukan, dan mencoba koreksi kemiringan
-kecil secara aman sebelum OCR. Teks OCR kemudian selalu dicoba pada Llama + Soft
+memperbaiki orientasi EXIF, memperbesar foto kecil hingga sisi panjang 2.000 piksel,
+menerapkan autocontrast dan sharpening, serta mencoba koreksi kemiringan kecil. Secara
+default PaddleOCR dijalankan pada varian grayscale dan adaptive-threshold, lalu hasil
+dengan struktur, confidence, keyword, dan nominal terbaik dipilih. Semua file varian
+bersifat sementara dan selalu dihapus.
+
+Normalisasi setelah OCR hanya memperbaiki pola yang dapat dipastikan, misalnya
+`Ro.1.500` menjadi `Rp 1.500`, `Rp.10-000` menjadi `Rp 10.000`, header tabel yang
+menempel, serta baris item yang melebur. Nama barang atau digit yang hilang tidak
+ditebak. Teks mentah tetap tersedia hanya untuk audit internal, sedangkan teks bersih
+ditampilkan untuk konfirmasi dan dikirim ke Llama. Teks OCR kemudian selalu dicoba pada Llama + Soft
 Prompt Nota ketika fitur aktif. Parser regex tidak lagi menjadi ekstraktor semantik
 utama; parser dipakai untuk kandidat total/tanggal/item, validasi silang, warning, dan
 fallback eksplisit. Nama file pengguna tidak dipakai sebagai path; file sementara
 selalu bernama acak dan dihapus pada jalur sukses maupun gagal.
+
+Quantity dengan pemisah titik, misalnya `4.000 kg`, dibedakan dari quantity desimal
+dengan mencocokkan harga satuan dan total baris yang tercetak. Total baris hasil OCR
+tetap dipertahankan; bila `quantity x harga`, jumlah seluruh item, atau subtotal pada
+nota tidak konsisten, CatatKas menampilkan warning dan tidak mengoreksi angka secara
+diam-diam.
 
 Hasil OCR tidak langsung dicatat. Dialog konfirmasi menampilkan nama toko, nomor nota,
 kandidat total, warning, rincian item, dan teks OCR sementara. Pengguna wajib memeriksa

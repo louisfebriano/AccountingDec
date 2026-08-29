@@ -1,9 +1,11 @@
 import unittest
 
 from src.receipt_parser import (
+    clean_receipt_ocr_text,
     extract_rupiah_values,
     parse_receipt,
     parse_receipt_date,
+    parse_receipt_quantity,
     parse_rupiah,
 )
 
@@ -13,11 +15,104 @@ def line(text, confidence=0.95):
 
 
 class ReceiptParserTests(unittest.TestCase):
+    def test_cleans_collapsed_table_and_common_currency_ocr_errors(self):
+        raw = (
+            "Tuan Toko NOTA NO. BANYAK- NYA NAMABARANG HARGA JUMLAH "
+            "1Kg Semangka Ro.1.500 1Kg Melon Rp.10-000 "
+            "1kg Nangka Rp.10.000 1kg Jambu p.7.500 "
+            "1kg Mangga Rp.20.000 1Kg Salak Rp.12-000 "
+            "1Kg Lengkeng Rp.25.000 1 Kg Pepaya Rp.5.000 "
+            "1 Kg Pisang tarduk Rp.11000 TANDA TERIMA "
+            "PERHATIAN: Jumlah Rp. 102.000 Hormat Kami"
+        )
+
+        cleaned = clean_receipt_ocr_text(raw)
+        result = parse_receipt([raw])
+
+        self.assertIn("NAMA BARANG", cleaned)
+        self.assertIn("1 kg Melon Rp 10.000", cleaned)
+        self.assertGreaterEqual(cleaned.count("\n1 kg"), 8)
+        self.assertEqual(result["receipt"]["total"], 102000)
+        self.assertEqual(result["receipt"]["items"][0]["item_name"], "Semangka")
+        self.assertEqual(result["receipt"]["items"][1]["unit_price"], 10000)
+        self.assertEqual(result["ocr_raw_text"], raw)
+        self.assertEqual(
+            clean_receipt_ocr_text("1 6urame goreng Rp.6S.000"),
+            "1 Gurame goreng Rp 65.000",
+        )
+
+    def test_does_not_guess_merged_item_with_multiple_prices(self):
+        result = parse_receipt(
+            [
+                "NOTA BANYAKNYA NAMA BARANG HARGA JUMLAH",
+                "1 Kg Apel+minyak Rp.28.000 + Rp.10.500",
+                "JUMLAH Rp.38.500",
+            ]
+        )
+        self.assertEqual(result["receipt"]["items"], [])
+        self.assertEqual(result["receipt"]["total"], 38500)
+
     def test_normalizes_common_indonesian_rupiah_formats(self):
         for raw in ("Rp 25.000", "Rp25.000", "25.000", "25,000", "25 000", "25000"):
             with self.subTest(raw=raw):
                 self.assertEqual(parse_rupiah(raw), 25000)
         self.assertEqual(extract_rupiah_values("TOTAL 25000"), [25000])
+
+    def test_disambiguates_grouped_quantity_using_printed_line_total(self):
+        self.assertEqual(
+            parse_receipt_quantity(
+                "4.000",
+                unit_price=12500,
+                line_total=50000000,
+            ),
+            4000,
+        )
+        self.assertEqual(
+            parse_receipt_quantity(
+                "1.000",
+                unit_price=12500,
+                line_total=12500,
+            ),
+            1,
+        )
+        self.assertEqual(
+            parse_receipt_quantity(
+                "0.500",
+                unit_price=10000,
+                line_total=5000,
+            ),
+            0.5,
+        )
+
+    def test_preserves_printed_item_totals_and_reads_bayar_as_total(self):
+        result = parse_receipt([
+            line("TOKO ABANG"),
+            line("Beras"),
+            line("4.000 kg X 12.500 Rp 50.000.000"),
+            line("Mie Instan"),
+            line("8.000 pcs X 3.000 Rp 24.000.000"),
+            line("Kardus Packing"),
+            line("800 pcs X 9.000 Rp 7.800.000"),
+            line("Subtotal Rp 81.200.000"),
+            line("Bayar Rp 81.200.000"),
+            line("Kembali Rp 0"),
+        ])
+
+        receipt = result["receipt"]
+        self.assertEqual(receipt["total"], 81200000)
+        self.assertEqual(result["total_candidates"], [81200000])
+        self.assertEqual(receipt["items"][0]["quantity"], 4000)
+        self.assertEqual(receipt["items"][0]["line_total"], 50000000)
+        self.assertEqual(receipt["items"][1]["quantity"], 8000)
+        self.assertEqual(receipt["items"][1]["line_total"], 24000000)
+        self.assertEqual(receipt["items"][2]["line_total"], 7800000)
+        self.assertTrue(
+            any("Kardus Packing" in warning for warning in receipt["warnings"])
+        )
+        self.assertIn(
+            "Jumlah rincian barang tidak sama dengan subtotal nota.",
+            receipt["warnings"],
+        )
 
     def test_extracts_supported_dates_without_confusing_time(self):
         expected = "2026-08-26"

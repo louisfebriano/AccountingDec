@@ -5,11 +5,12 @@ from __future__ import annotations
 import re
 import tempfile
 from pathlib import Path
+from statistics import mean
 from threading import Lock
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from . import config
-from .receipt_parser import parse_receipt
+from .receipt_parser import clean_receipt_ocr_text, extract_rupiah_values, parse_receipt
 
 
 class InvalidReceiptImageError(ValueError):
@@ -42,6 +43,10 @@ def get_receipt_ocr_model() -> Any:
                         use_gpu=False,
                         lang=config.RECEIPT_OCR_LANGUAGE,
                         show_log=False,
+                        use_space_char=True,
+                        det_db_box_thresh=config.RECEIPT_OCR_DET_BOX_THRESHOLD,
+                        det_db_unclip_ratio=1.8,
+                        drop_score=config.RECEIPT_OCR_DROP_SCORE,
                     )
                 except Exception as exc:
                     raise ReceiptOcrUnavailableError(
@@ -100,34 +105,84 @@ def _deskew_safely(image: Any) -> Any:
 
 
 def preprocess_receipt_image(source_path: Path) -> Path:
-    """Perbaiki orientasi, ukuran, kontras, dan kemiringan ke file JPEG sementara."""
+    """Perbaiki orientasi, resolusi, kontras, dan kemiringan untuk OCR."""
     from PIL import Image, ImageEnhance, ImageOps, ImageStat
 
     try:
         with Image.open(source_path) as source:
             image = ImageOps.exif_transpose(source).convert("RGB")
             max_dimension = config.RECEIPT_MAX_IMAGE_DIMENSION
-            if max(image.size) > max_dimension:
+            long_edge = max(image.size)
+            target_long_edge = min(
+                config.RECEIPT_OCR_TARGET_LONG_EDGE,
+                max_dimension,
+            )
+            if long_edge < target_long_edge:
+                scale = target_long_edge / long_edge
+                image = image.resize(
+                    (
+                        max(1, round(image.width * scale)),
+                        max(1, round(image.height * scale)),
+                    ),
+                    Image.Resampling.LANCZOS,
+                )
+            elif long_edge > max_dimension:
                 image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-            grayscale = image.convert("L")
+            grayscale = ImageOps.autocontrast(image.convert("L"), cutoff=1)
             deviation = ImageStat.Stat(grayscale).stddev[0]
             if deviation < 38:
-                image = ImageEnhance.Contrast(image).enhance(1.25)
-            image = _deskew_safely(image)
+                grayscale = ImageEnhance.Contrast(grayscale).enhance(1.35)
+            grayscale = ImageEnhance.Sharpness(grayscale).enhance(1.8)
+            image = _deskew_safely(grayscale)
     except Exception as exc:
         raise InvalidReceiptImageError("Gambar nota gagal diproses.") from exc
 
     handle = tempfile.NamedTemporaryFile(
-        prefix="catatkas-receipt-preprocessed-", suffix=".jpg", delete=False
+        prefix="catatkas-receipt-preprocessed-", suffix=".png", delete=False
     )
     output_path = Path(handle.name)
     handle.close()
     try:
-        image.save(output_path, format="JPEG", quality=94, optimize=True)
+        image.save(output_path, format="PNG", optimize=True)
     except Exception:
         output_path.unlink(missing_ok=True)
         raise
     return output_path
+
+
+def create_threshold_receipt_variant(source_path: Path) -> Path | None:
+    """Buat varian threshold adaptif; kembalikan None bila varian tidak aman dibuat."""
+    output_path: Path | None = None
+    try:
+        import cv2
+
+        grayscale = cv2.imread(str(source_path), cv2.IMREAD_GRAYSCALE)
+        if grayscale is None:
+            return None
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(grayscale)
+        threshold = cv2.adaptiveThreshold(
+            clahe,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,
+            15,
+        )
+        handle = tempfile.NamedTemporaryFile(
+            prefix="catatkas-receipt-threshold-",
+            suffix=".png",
+            delete=False,
+        )
+        output_path = Path(handle.name)
+        handle.close()
+        if not cv2.imwrite(str(output_path), threshold):
+            output_path.unlink(missing_ok=True)
+            return None
+        return output_path
+    except Exception:
+        if output_path is not None:
+            output_path.unlink(missing_ok=True)
+        return None
 
 
 def _line_from_entry(entry: Any) -> dict[str, Any] | None:
@@ -166,21 +221,86 @@ def normalize_paddle_result(result: Any) -> list[dict[str, Any]]:
     return lines
 
 
+def score_ocr_candidate(lines: Sequence[dict[str, Any]]) -> float:
+    """Nilai hasil OCR berdasarkan struktur, confidence, keyword, dan nominal."""
+    if not lines:
+        return float("-inf")
+    texts = [str(line.get("text") or "") for line in lines]
+    combined = clean_receipt_ocr_text("\n".join(texts))
+    confidences = [float(line.get("confidence") or 0.0) for line in lines]
+    keyword_count = len(
+        re.findall(
+            r"\b(?:nota|struk|nama\s*barang|harga|jumlah|total|rp|tanggal)\b",
+            combined,
+            re.IGNORECASE,
+        )
+    )
+    amount_count = len(extract_rupiah_values(combined))
+    parsed = parse_receipt(lines)
+    receipt = parsed.get("receipt") or {}
+    items = list(receipt.get("items") or [])
+    complete_prices = sum(
+        isinstance(item.get("unit_price"), int) and item["unit_price"] > 0
+        for item in items
+    )
+    long_block_penalty = 20 if len(lines) <= 2 and len(combined) > 180 else 0
+    return (
+        mean(confidences) * 20
+        + min(len(lines), 40) * 1.25
+        + min(keyword_count, 15) * 2
+        + min(amount_count, 20) * 2
+        + min(len(items), 10) * 5
+        + min(complete_prices, 10) * 2
+        + (4 if receipt.get("total") is not None else 0)
+        - long_block_penalty
+    )
+
+
+def select_best_ocr_lines(
+    candidates: Sequence[Sequence[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], int, list[float]]:
+    """Pilih pass OCR terbaik tanpa menggabungkan teks dari pass berbeda."""
+    if not candidates:
+        return [], 0, []
+    scores = [score_ocr_candidate(candidate) for candidate in candidates]
+    selected_index = max(range(len(candidates)), key=scores.__getitem__)
+    return list(candidates[selected_index]), selected_index, scores
+
+
 def extract_receipt(path: Path) -> dict[str, Any]:
     """Praproses gambar, jalankan OCR, lalu parse satu transaksi nota."""
-    processed_path: Path | None = None
+    processed_paths: list[Path] = []
     try:
         processed_path = preprocess_receipt_image(path)
+        processed_paths.append(processed_path)
+        if config.RECEIPT_OCR_MULTIPASS:
+            threshold_path = create_threshold_receipt_variant(processed_path)
+            if threshold_path is not None:
+                processed_paths.append(threshold_path)
         model = get_receipt_ocr_model()
-        try:
-            result = model.ocr(str(processed_path), cls=True)
-        except Exception as exc:
-            raise ReceiptOcrUnavailableError("OCR nota gagal dijalankan.") from exc
-        lines = normalize_paddle_result(result)
-        return parse_receipt(
+        candidates: list[list[dict[str, Any]]] = []
+        last_error: Exception | None = None
+        for candidate_path in processed_paths:
+            try:
+                result = model.ocr(str(candidate_path), cls=True)
+            except Exception as exc:
+                last_error = exc
+                continue
+            candidates.append(normalize_paddle_result(result))
+        if not candidates and last_error is not None:
+            raise ReceiptOcrUnavailableError("OCR nota gagal dijalankan.") from last_error
+
+        lines, selected_pass, scores = select_best_ocr_lines(candidates)
+        parsed = parse_receipt(
             lines,
             minimum_confidence=config.RECEIPT_MIN_CONFIDENCE,
         )
+        parsed["ocr_diagnostics"] = {
+            "passes": len(candidates),
+            "selected_pass": selected_pass,
+            "scores": [round(score, 4) for score in scores],
+        }
+        return parsed
     finally:
-        if processed_path is not None:
+        for processed_path in processed_paths:
             processed_path.unlink(missing_ok=True)

@@ -362,6 +362,14 @@ async def extract_receipt_endpoint(
             )
 
         rule_receipt = parsed["receipt"]
+        ocr_diagnostics = parsed.get("ocr_diagnostics") or {}
+        logger.info(
+            "[receipt:%s] ocr_passes=%s selected_pass=%s scores=%s",
+            request_id,
+            ocr_diagnostics.get("passes"),
+            ocr_diagnostics.get("selected_pass"),
+            ocr_diagnostics.get("scores"),
+        )
         logger.info(
             "[receipt:%s] rule_parser has_merchant=%s items=%d has_total=%s has_date=%s",
             request_id,

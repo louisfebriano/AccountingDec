@@ -70,12 +70,36 @@ _KNOWN_ITEM_UNITS = (
     "kotak",
     "liter",
     "ltr",
+    "ikat",
     "pack",
     "pak",
     "pcs",
     "porsi",
     "sachet",
     "unit",
+)
+
+_OCR_HEADER_ALIASES = (
+    (r"\bnota\s*no\.?", "NOTA NO."),
+    (r"\bnotano\.?", "NOTA NO."),
+    (r"\bbanyak\s*-?\s*nya\b", "BANYAKNYA"),
+    (r"\bbanyaavta\b", "BANYAKNYA"),
+    (r"\bnama\s*barang\b", "NAMA BARANG"),
+    (r"\bnamabarang\b", "NAMA BARANG"),
+    (r"\bnasadarang\b", "NAMA BARANG"),
+    (r"\bharsa\b", "HARGA"),
+    (r"\b(?:juniah|jdalan)\b", "JUMLAH"),
+    (r"\b(?:juniah|jdalan)(?=\s*rp)", "JUMLAH "),
+    (r"\bhormatkami\b", "Hormat Kami"),
+    (r"\bt[0o]tal\b", "TOTAL"),
+)
+_OCR_CURRENCY_PREFIX = re.compile(
+    r"(?<![A-Za-z0-9])(?:rp|ro|r0|pp|2p|p)\s*[.,]?\s*"
+    r"(?=\d{1,3}(?:[.,\-\s]\d{2,3})|\d{3,})",
+    re.IGNORECASE,
+)
+_OCR_ROW_UNIT_PATTERN = "|".join(
+    sorted((re.escape(unit) for unit in _KNOWN_ITEM_UNITS), key=len, reverse=True)
 )
 
 
@@ -114,6 +138,38 @@ def parse_rupiah(value: Any) -> Optional[int]:
         return None
     digits = re.sub(r"\D", "", text)
     return int(digits) if digits else None
+
+
+def parse_receipt_quantity(
+    value: Any,
+    *,
+    unit_price: Optional[int] = None,
+    line_total: Optional[int] = None,
+) -> Optional[float]:
+    """Bedakan separator desimal/ribuan quantity memakai line total bila tersedia."""
+    text = re.sub(r"\s+", "", str(value or "").strip())
+    if not text or not re.fullmatch(r"\d+(?:[.,]\d+)*", text):
+        return None
+
+    candidates: list[float] = []
+    if text.count(".") + text.count(",") <= 1:
+        try:
+            candidates.append(float(text.replace(",", ".")))
+        except ValueError:
+            pass
+    groups = re.split(r"[.,]", text)
+    if len(groups) > 1 and all(len(group) == 3 for group in groups[1:]):
+        candidates.append(float("".join(groups)))
+    if not candidates:
+        candidates.append(float("".join(groups)))
+
+    unique_candidates = list(dict.fromkeys(candidates))
+    if unit_price is not None and line_total is not None and unit_price > 0:
+        return min(
+            unique_candidates,
+            key=lambda quantity: abs(quantity * unit_price - line_total),
+        )
+    return unique_candidates[0]
 
 
 def extract_rupiah_values(text: str) -> list[int]:
@@ -211,6 +267,59 @@ def normalize_ocr_lines(lines: Iterable[Any]) -> list[ReceiptLine]:
     return merged
 
 
+def clean_receipt_ocr_text(text: str) -> str:
+    """Rapikan error OCR umum tanpa menebak karakter nama barang yang hilang."""
+    cleaned = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = re.sub(r"(?<=\d)[sS](?=[.,]\d{3}\b)", "5", cleaned)
+    cleaned = re.sub(
+        r"\b6(?=[aeiou][A-Za-z]{2,}\b)",
+        "G",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    for pattern, replacement in _OCR_HEADER_ALIASES:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"(?i)jumlah\s*rp", "JUMLAH Rp", cleaned)
+    cleaned = _OCR_CURRENCY_PREFIX.sub("Rp ", cleaned)
+    cleaned = re.sub(r"(?<=\d)[\-–—](?=\d{3}\b)", ".", cleaned)
+    cleaned = re.sub(
+        rf"(?<=\d)\s*(?P<unit>{_OCR_ROW_UNIT_PATTERN})\b",
+        lambda match: f" {match.group('unit').lower()}",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # Nota tabel beresolusi rendah kadang dibaca sebagai satu paragraf. Pecah hanya
+    # pada marker struktural yang kuat agar nama barang tidak direkayasa.
+    cleaned = re.sub(
+        rf"(?<!^)(?<!\n)\s+(?=\d+(?:[.,]\d+)?\s*(?:{_OCR_ROW_UNIT_PATTERN})\b)",
+        "\n",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\s+(?=(?:JUMLAH\s+Rp|TANDA\s+TERIMA|PERHATIAN\s*:|HORMAT\s+KAMI)\b)",
+        "\n",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return "\n".join(
+        re.sub(r"[ \t]+", " ", line).strip()
+        for line in cleaned.splitlines()
+        if line.strip()
+    )
+
+
+def clean_receipt_ocr_lines(lines: Sequence[ReceiptLine]) -> list[ReceiptLine]:
+    """Terapkan pembersihan per deteksi sambil mempertahankan confidence OCR."""
+    cleaned_lines: list[ReceiptLine] = []
+    for line in lines:
+        for text in clean_receipt_ocr_text(line.text).splitlines():
+            if text:
+                cleaned_lines.append(ReceiptLine(text, line.confidence, line.box))
+    return cleaned_lines
+
+
 def _label_value(lines: Sequence[ReceiptLine], pattern: str) -> Optional[int]:
     matcher = re.compile(pattern, re.IGNORECASE)
     for index, line in enumerate(lines):
@@ -230,6 +339,7 @@ def _total_candidates(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
     positive_labels = (
         (r"\bgrand\s*total\b", 120),
         (r"\btotal\s+(?:bayar|pembayaran)\b", 115),
+        (r"\bbayar\b", 110),
         (r"\bjumlah\b", 100),
         (r"(?<!sub)\btotal\b", 90),
     )
@@ -245,7 +355,19 @@ def _total_candidates(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
             if not re.search(pattern, line.text, re.IGNORECASE):
                 continue
             values = extract_rupiah_values(line.text)
-            if not values and index + 1 < len(lines):
+            is_table_header = bool(
+                re.search(
+                    r"\b(?:nama\s*barang|harga|banyak(?:nya)?|qty)\b",
+                    line.text,
+                    re.IGNORECASE,
+                )
+            )
+            if (
+                not values
+                and not is_table_header
+                and len(line.text.split()) <= 4
+                and index + 1 < len(lines)
+            ):
                 values = extract_rupiah_values(lines[index + 1].text)
             if values:
                 candidates.append(
@@ -302,7 +424,9 @@ def _is_item_name(text: str) -> bool:
     )
 
 
-def _parse_quantity_pattern(text: str) -> Optional[tuple[float, Optional[str], int]]:
+def _parse_quantity_pattern(
+    text: str,
+) -> Optional[tuple[float, Optional[str], int, Optional[int]]]:
     match = re.search(
         r"(?<!\d)(\d+(?:[.,]\d+)?)\s*([a-zA-Z]{1,12})?\s*[xX@]\s*((?:rp\.?\s*)?(?:\d{1,3}(?:[.,]\d{3})+|\d{3,}))",
         text,
@@ -310,12 +434,20 @@ def _parse_quantity_pattern(text: str) -> Optional[tuple[float, Optional[str], i
     )
     if not match:
         return None
-    quantity = float(match.group(1).replace(",", "."))
     unit = match.group(2).lower() if match.group(2) else None
     unit_price = parse_rupiah(match.group(3))
     if unit_price is None:
         return None
-    return quantity, unit, unit_price
+    suffix_values = extract_rupiah_values(text[match.end():])
+    explicit_line_total = suffix_values[-1] if suffix_values else None
+    quantity = parse_receipt_quantity(
+        match.group(1),
+        unit_price=unit_price,
+        line_total=explicit_line_total,
+    )
+    if quantity is None:
+        return None
+    return quantity, unit, unit_price, explicit_line_total
 
 
 def _item_table_bounds(lines: Sequence[ReceiptLine]) -> tuple[int, int] | None:
@@ -361,6 +493,10 @@ def _parse_tabular_item_line(
         return None
 
     prefix = line.text[: price_match.start()].strip(" -:|.")
+    if extract_rupiah_values(prefix):
+        # Dua nominal atau lebih pada satu deteksi biasanya berarti beberapa kolom/
+        # item melebur. Jangan memilih nominal terakhir secara diam-diam.
+        return None
     quantity: Optional[float] = None
     unit: Optional[str] = None
     item_name = prefix
@@ -370,7 +506,7 @@ def _parse_tabular_item_line(
         re.IGNORECASE,
     )
     if quantity_match:
-        quantity = float(quantity_match.group(1).replace(",", "."))
+        quantity = parse_receipt_quantity(quantity_match.group(1))
         remainder = quantity_match.group(2).strip()
         units = "|".join(re.escape(value) for value in _KNOWN_ITEM_UNITS)
         unit_match = re.match(rf"^({units})\b\s*(.+)$", remainder, re.IGNORECASE)
@@ -442,8 +578,8 @@ def _extract_items(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
             index += 1
             continue
 
-        quantity, unit, unit_price = quantity_info
-        line_total: Optional[int] = None
+        quantity, unit, unit_price, explicit_line_total = quantity_info
+        line_total: Optional[int] = explicit_line_total
         current_values = extract_rupiah_values(line.text)
         if len(current_values) >= 2:
             line_total = current_values[-1]
@@ -485,10 +621,17 @@ def parse_receipt(
     minimum_confidence: float = 0.5,
 ) -> dict[str, Any]:
     """Ekstrak satu transaksi induk dan rincian item dari baris OCR nota."""
-    lines = normalize_ocr_lines(ocr_lines)
+    raw_lines = normalize_ocr_lines(ocr_lines)
+    raw_ocr_text = "\n".join(line.text for line in raw_lines)[:MAX_OCR_TEXT_LENGTH].strip()
+    lines = clean_receipt_ocr_lines(raw_lines)
     ocr_text = "\n".join(line.text for line in lines)[:MAX_OCR_TEXT_LENGTH].strip()
     if not ocr_text:
-        return {"ocr_text": "", "receipt": None, "total_candidates": []}
+        return {
+            "ocr_text": "",
+            "ocr_raw_text": raw_ocr_text,
+            "receipt": None,
+            "total_candidates": [],
+        }
 
     candidates = _total_candidates(lines)
     total = candidates[0]["value"] if candidates else None
@@ -515,13 +658,29 @@ def parse_receipt(
         warnings.append(
             "Sebagian rincian barang tidak lengkap. Periksa quantity dan nominal pada nota."
         )
+    for item in items:
+        quantity = item.get("quantity")
+        unit_price = item.get("unit_price")
+        line_total = item.get("line_total")
+        if quantity is None or unit_price is None or line_total is None:
+            continue
+        calculated = round(quantity * unit_price)
+        if amounts_differ(calculated, line_total):
+            warnings.append(
+                f"Perhitungan item {item['item_name']} tidak sesuai: "
+                f"quantity x harga = Rp{calculated:,}, tetapi nota mencetak "
+                f"Rp{line_total:,}."
+            )
 
     average_confidence = mean(line.confidence for line in lines)
     if average_confidence < minimum_confidence:
         warnings.append("Keyakinan OCR rendah. Periksa kembali seluruh hasil nota.")
 
     line_total_sum = sum(item["line_total"] for item in items if item["line_total"] is not None)
-    if items and subtotal is not None and amounts_differ(line_total_sum, subtotal):
+    # Subtotal nota seharusnya sama persis dengan penjumlahan total per item.
+    # Jangan gunakan toleransi persentase karena pada nota bernilai besar selisih
+    # ratusan ribu dapat ikut dianggap benar.
+    if items and subtotal is not None and line_total_sum != subtotal:
         warnings.append("Jumlah rincian barang tidak sama dengan subtotal nota.")
 
     if subtotal is not None and total is not None:
@@ -543,6 +702,7 @@ def parse_receipt(
     }
     return {
         "ocr_text": ocr_text,
+        "ocr_raw_text": raw_ocr_text,
         "receipt": receipt,
         "total_candidates": [candidate["value"] for candidate in candidates],
         "date": parsed_date,
