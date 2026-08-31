@@ -8,6 +8,7 @@ class TransactionTypeClassifierTests(unittest.TestCase):
         examples = (
             "Beli tepung 2 karung 250rb",
             "Restok minyak goreng 5 liter 90rb",
+            "Ristok galon Aqua 15 botol 52.000",
             "Bayar listrik toko 300rb",
         )
 

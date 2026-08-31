@@ -36,6 +36,14 @@ _FRACTION_VALUES = {
     "seperempat": "0.25",
     "tiga perempat": "0.75",
 }
+_VOICE_WORD_ALIASES = {
+    "karong": "karung",
+    "ristok": "restok",
+}
+_VOICE_WORD_ALIAS_PATTERN = re.compile(
+    rf"\b(?:{'|'.join(map(re.escape, _VOICE_WORD_ALIASES))})\b",
+    re.IGNORECASE,
+)
 
 
 def _parse_under_hundred(words: List[str]) -> Optional[int]:
@@ -146,3 +154,14 @@ def normalize_indonesian_numbers(text: str) -> str:
         return str(value) if value is not None else match.group(0)
 
     return _NUMBER_PHRASE_PATTERN.sub(replace_phrase, normalized_text)
+
+
+def normalize_voice_transaction_text(text: str) -> str:
+    """Normalisasi variasi transkripsi transaksi lalu bilangan Indonesia."""
+    if not text:
+        return text
+    normalized_words = _VOICE_WORD_ALIAS_PATTERN.sub(
+        lambda match: _VOICE_WORD_ALIASES[match.group(0).casefold()],
+        text,
+    )
+    return normalize_indonesian_numbers(normalized_words)

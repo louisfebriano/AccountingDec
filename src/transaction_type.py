@@ -30,6 +30,7 @@ EXPENSE_PHRASES = (
     "belanja",
     "restok",
     "restock",
+    "ristok",
     "kulakan",
     "pengeluaran",
     "biaya operasional",

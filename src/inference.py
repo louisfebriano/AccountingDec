@@ -148,6 +148,38 @@ def generate_with_adapter(
         return raw_output.strip()
 
 
+def generate_with_base_model(
+    messages: list[dict[str, str]],
+    *,
+    max_new_tokens: int,
+    transaction_adapter_path: str | None = None,
+) -> str:
+    """Generate chat Llama dasar tanpa Soft Prompt pada model cache yang sama."""
+    with _generation_lock:
+        tokenizer, model = get_pipeline(transaction_adapter_path)
+        disable_adapter = getattr(model, "disable_adapter", None)
+        if not callable(disable_adapter):
+            raise RuntimeError("Model aktif tidak mendukung inferensi tanpa adapter.")
+
+        prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        with disable_adapter(), torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+        return tokenizer.decode(
+            output_ids[0][inputs["input_ids"].shape[1]:],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        ).strip()
+
+
 def extract_transaction(user_input: str, adapter_path: str = None, reference_date=None) -> dict:
     # Validasi konteks dulu SEBELUM panggil model -- hemat komputasi kalau kalimatnya
     # jelas bukan transaksi, dan responnya lebih cepat + jelas alasannya ke user.

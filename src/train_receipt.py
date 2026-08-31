@@ -22,6 +22,7 @@ from .prompt_utils import (
     build_receipt_prompt,
     _dict_to_json_str,
 )
+from .receipt_parser import compact_receipt_ocr_text
 from .receipt_schema import RECEIPT_SCHEMA_FIELDS, ReceiptExtractionSchema
 
 
@@ -162,13 +163,32 @@ def validate_receipt_splits(
     )
 
 
+def _canonical_training_output(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Pulihkan tipe target yang dapat diubah oleh serialisasi Arrow Dataset."""
+    output = dict(value)
+    items = []
+    for raw_item in output.get("items") or []:
+        item = dict(raw_item)
+        quantity = item.get("quantity")
+        if isinstance(quantity, float) and quantity.is_integer():
+            item["quantity"] = int(quantity)
+        items.append(item)
+    output["items"] = items
+    return ReceiptExtractionSchema.model_validate(output, strict=True).model_dump()
+
+
 def format_receipt_example(example: Mapping[str, Any], tokenizer: Any) -> dict[str, Any]:
     """Gabungkan prompt receipt dan target JSON memakai kontrak yang sama."""
-    prompt = build_receipt_prompt(
+    output = _canonical_training_output(dict(example["output"]))
+    model_ocr_text = compact_receipt_ocr_text(
         str(example["input"]),
+        output,
+    )
+    prompt = build_receipt_prompt(
+        model_ocr_text,
         date.fromisoformat(str(example["reference_date"])),
     )
-    target = _dict_to_json_str(dict(example["output"]))
+    target = _dict_to_json_str(output)
     tokenized = tokenizer(
         f"{prompt} {target}{tokenizer.eos_token}",
         truncation=False,
@@ -176,8 +196,9 @@ def format_receipt_example(example: Mapping[str, Any], tokenizer: Any) -> dict[s
     )
     sequence_length = len(tokenized["input_ids"])
     if sequence_length > config.RECEIPT_MAX_SEQ_LENGTH:
+        receipt_label = str(example.get("receipt_id") or "tanpa receipt_id")
         raise ValueError(
-            "Contoh receipt memiliki "
+            f"Contoh receipt {receipt_label} memiliki "
             f"{sequence_length} token, melebihi RECEIPT_MAX_SEQ_LENGTH="
             f"{config.RECEIPT_MAX_SEQ_LENGTH}. Ringkas OCR atau naikkan batas secara "
             "sadar; target JSON tidak dipotong diam-diam."

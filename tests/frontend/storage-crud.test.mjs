@@ -168,21 +168,28 @@ test("satu nota dikonfirmasi sebagai satu transaksi dengan banyak rincian", () =
 
   assert.equal(loadHistory(storage).length, 0, "hasil OCR belum tersimpan sebelum konfirmasi");
   const saved = createReceiptTransaction(response, {
-    date: "2026-08-27",
-    total_price: "85000",
-  }, { storage, idFactory: () => "receipt-1" });
+    items: [
+      { item_name: "Minyak Goreng", quantity: 2, unit: "liter", unit_price: 21000, line_total: 42000 },
+      { item_name: "Beras", quantity: 2, unit: "kg", unit_price: 16000, line_total: 32000 },
+    ],
+  }, {
+    storage,
+    idFactory: () => "receipt-1",
+    now: new Date(2026, 7, 30, 10, 0, 0),
+  });
 
   assert.equal(saved.history.length, 1);
   assert.equal(saved.record.source, "receipt");
   assert.equal(saved.record.transaction_type, "expense");
-  assert.equal(saved.record.date, "2026-08-27");
-  assert.equal(saved.record.total_price, 85000);
-  assert.equal(saved.record.receipt.total, 85000);
+  assert.equal(saved.record.date, "2026-08-30");
+  assert.equal(saved.record.total_price, 74000);
+  assert.equal(saved.record.receipt.total, 74000);
   assert.equal(saved.record.receipt.items.length, 2);
-  assert.deepEqual(calculateSummary(saved.history), { income: 0, expense: 85000, balance: -85000 });
+  assert.equal(saved.record.receipt.items[0].item_name, "Minyak Goreng");
+  assert.deepEqual(calculateSummary(saved.history), { income: 0, expense: 74000, balance: -74000 });
 
   const serialized = storage.getItem(HISTORY_KEY);
-  assert.doesNotMatch(serialized, /RAW OCR|RAW MODEL|FOTO TIDAK|ocr_text|raw_output|image|warnings|transien/);
+  assert.doesNotMatch(serialized, /RAW OCR|RAW MODEL|FOTO TIDAK|ocr_text|raw_output|image|warnings|transien|INV-001|subtotal|discount|tax|service_charge|receipt_number/);
 });
 
 test("edit transaksi induk mempertahankan rincian nota", () => {
@@ -200,7 +207,10 @@ test("edit transaksi induk mempertahankan rincian nota", () => {
       },
     },
   };
-  createReceiptTransaction(response, { date: "2026-08-26", total_price: 50000 }, {
+  createReceiptTransaction(response, {
+    date: "2026-08-26",
+    items: [{ item_name: "Telur", quantity: 2, unit: "kg", unit_price: 25000, line_total: 50000 }],
+  }, {
     storage,
     idFactory: () => "receipt-edit",
   });

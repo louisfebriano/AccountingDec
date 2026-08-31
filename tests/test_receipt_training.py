@@ -138,6 +138,76 @@ class ReceiptTrainingDataTests(unittest.TestCase):
         self.assertFalse(tokenizer.kwargs["truncation"])
         self.assertEqual(tokenized["labels"], tokenized["input_ids"])
 
+    def test_training_compacts_ocr_without_dropping_transaction_fields(self):
+        tokenizer = FakeTokenizer()
+        example = row(
+            text=(
+                "TOKO BERKAH\n"
+                "Jl. Contoh No. 10\n"
+                "NPWP 01.234.567.8-999.000\n"
+                "Beras 1 kg Rp 10.000\n"
+                "TOTAL Rp 10.000\n"
+                "Terima kasih"
+            ),
+            output=receipt_output(
+                items=[
+                    {
+                        "item_name": "Beras",
+                        "quantity": 1,
+                        "unit": "kg",
+                        "unit_price": 10000,
+                        "line_total": 10000,
+                    }
+                ],
+                subtotal=10000,
+                total=10000,
+            ),
+        )
+
+        train_receipt.format_receipt_example(
+            train_receipt.validate_receipt_training_row(example),
+            tokenizer,
+        )
+
+        self.assertIn("TOKO BERKAH", tokenizer.text)
+        self.assertIn("Beras\n1 kg Rp 10.000", tokenizer.text)
+        self.assertIn("TOTAL Rp 10.000", tokenizer.text)
+        self.assertNotIn("Jl. Contoh", tokenizer.text)
+        self.assertNotIn("NPWP", tokenizer.text)
+        self.assertNotIn("Terima kasih", tokenizer.text)
+
+    def test_training_restores_integer_quantity_after_arrow_coercion(self):
+        tokenizer = FakeTokenizer()
+        example = row(
+            output=receipt_output(
+                items=[
+                    {
+                        "item_name": "Beras",
+                        "quantity": 4000.0,
+                        "unit": "kg",
+                        "unit_price": 12500,
+                        "line_total": 50000000,
+                    },
+                    {
+                        "item_name": "Gula",
+                        "quantity": 1.5,
+                        "unit": "kg",
+                        "unit_price": 16000,
+                        "line_total": 24000,
+                    },
+                ]
+            ),
+        )
+
+        train_receipt.format_receipt_example(
+            train_receipt.validate_receipt_training_row(example),
+            tokenizer,
+        )
+
+        self.assertIn('"quantity": 4000', tokenizer.text)
+        self.assertNotIn('"quantity": 4000.0', tokenizer.text)
+        self.assertIn('"quantity": 1.5', tokenizer.text)
+
     def test_training_rejects_overlong_example_without_truncating_target(self):
         with patch.object(train_receipt.config, "RECEIPT_MAX_SEQ_LENGTH", 8):
             with self.assertRaisesRegex(ValueError, "tidak dipotong diam-diam"):

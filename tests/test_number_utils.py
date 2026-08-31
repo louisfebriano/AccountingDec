@@ -1,6 +1,9 @@
 import unittest
 
-from src.number_utils import normalize_indonesian_numbers
+from src.number_utils import (
+    normalize_indonesian_numbers,
+    normalize_voice_transaction_text,
+)
 
 
 class NormalizeIndonesianNumbersTests(unittest.TestCase):
@@ -46,6 +49,20 @@ class NormalizeIndonesianNumbersTests(unittest.TestCase):
         self.assertEqual(
             normalize_indonesian_numbers("harga dua koma lima juta dan tambah setengah"),
             "harga dua koma lima juta dan tambah setengah",
+        )
+
+    def test_normalizes_whisper_variant_ristok_before_transaction_pipeline(self):
+        self.assertEqual(
+            normalize_voice_transaction_text(
+                "Tadi Ristok Galon Aqua lima belas Botol abis 52.000"
+            ),
+            "Tadi restok Galon Aqua 15 Botol abis 52.000",
+        )
+
+    def test_known_unit_typo_remains_supported_when_llama_falls_back(self):
+        self.assertEqual(
+            normalize_voice_transaction_text("beli tepung 4 karong 44 ribu"),
+            "beli tepung 4 karung 44 ribu",
         )
 
 

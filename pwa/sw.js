@@ -1,15 +1,15 @@
-const CACHE_NAME = "catatkas-shell-v17";
+const CACHE_NAME = "catatkas-shell-v21";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=16",
-  "/app.js?v=17",
-  "/api.js?v=16",
+  "/styles.css?v=19",
+  "/app.js?v=21",
+  "/api.js?v=18",
   "/formatters.js?v=16",
   "/filters.js?v=16",
   "/chart.js?v=16",
   "/theme.js?v=16",
-  "/storage.js?v=16",
+  "/storage.js?v=19",
   "/request-gate.js?v=16",
   "/recorder.js?v=16",
   "/manifest.webmanifest",
@@ -33,7 +33,10 @@ self.addEventListener("activate", (event) => {
 });
 
 function isApiRequest(url) {
-  return url.pathname === "/extract" || url.pathname === "/extract/audio" || url.pathname === "/health";
+  return url.pathname.startsWith("/extract")
+    || url.pathname.startsWith("/auth")
+    || url.pathname.startsWith("/transactions")
+    || url.pathname.startsWith("/health");
 }
 
 self.addEventListener("fetch", (event) => {

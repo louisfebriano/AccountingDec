@@ -12,9 +12,73 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=16">
+    <link rel="stylesheet" href="/styles.css?v=19">
   </head>
-  <body>
+  <body data-auth-state="loading">
+    <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
+      <article class="auth-card">
+        <div class="auth-brand">
+          <span class="brand-mark" aria-hidden="true">CK</span>
+          <div>
+            <p class="eyebrow">CatatKas</p>
+            <h1 id="auth-title">Kelola kas dengan akun Anda</h1>
+          </div>
+        </div>
+        <p class="auth-intro">Login atau buat akun terlebih dahulu. Setiap transaksi akan disimpan dengan user ID akun Supabase Anda.</p>
+
+        <div class="auth-loading" id="auth-loading" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          Memeriksa sesi login…
+        </div>
+
+        <div class="auth-content" id="auth-content" hidden>
+          <div class="auth-tabs" role="tablist" aria-label="Pilihan autentikasi">
+            <button class="tab-button is-active" id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="login-panel">Login</button>
+            <button class="tab-button" id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="register-panel">Register</button>
+          </div>
+
+          <div id="login-panel" role="tabpanel" aria-labelledby="login-tab">
+            <form class="auth-form" id="login-form">
+              <div>
+                <label for="login-email">Email</label>
+                <input id="login-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+              </div>
+              <div>
+                <label for="login-password">Password</label>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="128">
+              </div>
+              <button class="button button-primary submit-button" id="login-submit" type="submit">
+                <span class="button-label">Login</span>
+                <span class="spinner" aria-hidden="true"></span>
+              </button>
+            </form>
+          </div>
+
+          <div id="register-panel" role="tabpanel" aria-labelledby="register-tab" hidden>
+            <form class="auth-form" id="register-form">
+              <div>
+                <label for="register-email">Email</label>
+                <input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+              </div>
+              <div>
+                <label for="register-password">Password <span>minimal 8 karakter</span></label>
+                <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+              </div>
+              <div>
+                <label for="register-password-confirmation">Ulangi password</label>
+                <input id="register-password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+              </div>
+              <button class="button button-primary submit-button" id="register-submit" type="submit">
+                <span class="button-label">Buat akun</span>
+                <span class="spinner" aria-hidden="true"></span>
+              </button>
+            </form>
+          </div>
+          <p class="auth-status" id="auth-status" role="alert" aria-live="polite"></p>
+        </div>
+      </article>
+    </section>
+
     <div class="app-shell">
       <header class="app-header" id="beranda">
         <a class="brand" href="#beranda" aria-label="CatatKas, kembali ke beranda">
@@ -48,10 +112,9 @@
         <section class="summary-section" aria-labelledby="summary-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Ringkasan perangkat ini</p>
+              <p class="eyebrow">Ringkasan akun Anda</p>
               <h1 id="summary-title">Keuangan tercatat</h1>
             </div>
-            <p>Data tersimpan hanya di browser ini.</p>
           </div>
           <div class="summary-grid">
             <article class="summary-card balance-card">
@@ -209,7 +272,7 @@
           <section class="panel history-panel" id="riwayat" aria-labelledby="history-title">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Perangkat ini</p>
+                <p class="eyebrow">Akun Anda</p>
                 <h2 id="history-title">Riwayat transaksi</h2>
               </div>
               <div class="history-actions">
@@ -307,8 +370,12 @@
       </div>
       <div class="dialog-content">
         <section>
+          <h3>Akun</h3>
+          <p>Login sebagai <strong id="auth-user-email">—</strong>. Seluruh transaksi dipisahkan berdasarkan user ID.</p>
+        </section>
+        <section>
           <h3>Penyimpanan</h3>
-          <p>Maksimal 50 transaksi disimpan di browser ini. Rekaman suara, foto nota, teks OCR mentah, dan output mentah model tidak pernah disimpan.</p>
+          <p>Supabase menjadi sumber utama. Browser hanya menyimpan cache maksimal 50 transaksi milik akun aktif. Input teks, transkrip, teks normalisasi, dan OCR dicatat pada metadata audit untuk penelusuran; rekaman suara, foto nota, password, token, dan output mentah model tidak disimpan.</p>
         </section>
         <section>
           <h3>Tampilan</h3>
@@ -324,7 +391,8 @@
         </section>
       </div>
       <div class="dialog-actions">
-        <button class="button button-secondary" id="dialog-clear-history" type="button">Hapus riwayat lokal</button>
+        <button class="button button-danger" id="logout-button" type="button">Logout</button>
+        <button class="button button-secondary" id="dialog-clear-history" type="button">Hapus semua transaksi</button>
         <button class="button button-primary" id="done-settings" type="button">Selesai</button>
       </div>
     </dialog>
@@ -359,11 +427,6 @@
         <h3>Rincian nota</h3>
         <dl class="receipt-metadata-grid">
           <div><dt>Nama toko</dt><dd id="detail-receipt-merchant">—</dd></div>
-          <div><dt>Nomor nota</dt><dd id="detail-receipt-number">—</dd></div>
-          <div><dt>Subtotal</dt><dd id="detail-receipt-subtotal">—</dd></div>
-          <div><dt>Diskon</dt><dd id="detail-receipt-discount">—</dd></div>
-          <div><dt>Pajak</dt><dd id="detail-receipt-tax">—</dd></div>
-          <div><dt>Biaya layanan</dt><dd id="detail-receipt-service">—</dd></div>
         </dl>
         <h3>Barang pada nota</h3>
         <ul class="receipt-item-list" id="detail-receipt-items"></ul>
@@ -386,7 +449,6 @@
       <p class="receipt-privacy-note">Foto hanya digunakan selama proses OCR dan tidak disimpan oleh CatatKas.</p>
       <dl class="receipt-metadata-grid receipt-confirm-metadata">
         <div><dt>Nama toko</dt><dd id="receipt-confirm-merchant">—</dd></div>
-        <div><dt>Nomor nota</dt><dd id="receipt-confirm-number">—</dd></div>
       </dl>
       <form id="receipt-confirm-form">
         <div class="manual-form-grid">
@@ -394,23 +456,21 @@
             <label for="receipt-confirm-date">Tanggal transaksi</label>
             <input id="receipt-confirm-date" type="date" required>
           </div>
-          <div class="form-field manual-price-field">
-            <label for="receipt-confirm-total">Total akhir</label>
-            <input id="receipt-confirm-total" type="number" min="1" step="1" inputmode="numeric" required>
+          <div class="receipt-calculated-total" aria-live="polite">
+            <span>Total transaksi dari rincian barang</span>
+            <strong id="receipt-confirm-calculated-total">Rp0</strong>
           </div>
         </div>
-        <div class="receipt-candidates" id="receipt-total-candidates" hidden>
-          <strong>Kandidat total</strong>
-          <div id="receipt-total-candidate-buttons"></div>
-        </div>
-        <section class="receipt-warning-box" id="receipt-warning-box" hidden>
-          <strong>Perlu diperiksa</strong>
-          <ul id="receipt-warning-list"></ul>
-        </section>
         <section class="receipt-confirm-items">
-          <h3>Rincian barang</h3>
-          <ul class="receipt-item-list" id="receipt-confirm-items"></ul>
-          <p id="receipt-confirm-empty-items">Rincian barang tidak terbaca. Nota tetap dapat disimpan sebagai satu transaksi.</p>
+          <div class="receipt-editor-heading">
+            <div>
+              <h3>Periksa rincian barang</h3>
+              <p>Edit nama, quantity, unit, dan harga sebelum transaksi disimpan.</p>
+            </div>
+            <button class="button button-secondary compact-button" id="receipt-add-item-button" type="button">+ Tambah barang</button>
+          </div>
+          <div class="receipt-item-editor-list" id="receipt-confirm-items"></div>
+          <p id="receipt-confirm-empty-items">Belum ada barang. Tambahkan minimal satu barang beserta harganya.</p>
         </section>
         <details class="ocr-preview">
           <summary>Lihat teks OCR sementara</summary>
@@ -474,6 +534,12 @@
       </form>
     </dialog>
 
-    <script type="module" src="/app.js?v=17"></script>
+    <aside class="action-popup" id="action-popup" role="status" aria-live="polite" aria-atomic="true" hidden>
+      <span class="action-popup-icon" id="action-popup-icon" aria-hidden="true">✓</span>
+      <span class="action-popup-message" id="action-popup-message"></span>
+      <button class="action-popup-close" id="action-popup-close" type="button" aria-label="Tutup notifikasi">×</button>
+    </aside>
+
+    <script type="module" src="/app.js?v=21"></script>
   </body>
 </html>

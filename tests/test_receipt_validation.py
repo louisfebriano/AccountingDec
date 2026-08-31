@@ -41,6 +41,43 @@ def rule_result():
 
 
 class ReceiptSemanticValidationTests(unittest.TestCase):
+    def test_retail_ppn_after_dpp_is_treated_as_included_tax(self):
+        item = {
+            "item_name": "RDL PAPAYA135G",
+            "quantity": 1,
+            "unit": None,
+            "unit_price": 52900,
+            "line_total": 52900,
+        }
+        llama = semantic_receipt(
+            merchant_name="ALFAMART",
+            date=None,
+            items=[item],
+            subtotal=52900,
+            discount=2000,
+            tax=5242,
+            total=50900,
+        )
+        parsed = {
+            "date": None,
+            "total_candidates": [50900],
+            "receipt": {
+                "merchant_name": "ALFAMART",
+                "items": [item],
+                "warnings": [],
+            },
+        }
+
+        result = validate_receipt_semantics(
+            llama,
+            parsed,
+            "ALFAMART\nRDL PAPAYA135G 1 52,900 52,900\n"
+            "TOTAL BELANJA 50,900\nPPN DPP: 47,657 PPN: 5,242",
+        )
+
+        self.assertEqual(result["status"], "valid")
+        self.assertEqual(result["warnings"], [])
+
     def test_consistent_result_is_valid(self):
         result = validate_receipt_semantics(
             semantic_receipt(),

@@ -19,6 +19,59 @@ HF_TOKEN = os.getenv("HF_TOKEN")  # optional kalau sudah login via huggingface-c
 # Quantization (biar muat di GPU lokal, misal 8GB-12GB VRAM)
 USE_4BIT = True
 
+# ---- Supabase PostgreSQL ----
+# Simpan connection string hanya di .env. Untuk FastAPI yang hidup terus-menerus,
+# gunakan direct connection atau Supavisor session mode. Transaction mode memakai
+# NullPool dan menonaktifkan prepared statements di src.database.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_POOL_MODE = os.getenv("DATABASE_POOL_MODE", "session").strip().lower()
+DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "5"))
+DATABASE_MAX_OVERFLOW = int(os.getenv("DATABASE_MAX_OVERFLOW", "5"))
+DATABASE_CONNECT_TIMEOUT_SECONDS = int(
+    os.getenv("DATABASE_CONNECT_TIMEOUT_SECONDS", "10")
+)
+DATABASE_TRANSACTIONS_TABLE = os.getenv(
+    "DATABASE_TRANSACTIONS_TABLE", "transactions"
+).strip()
+DATABASE_RECEIPTS_TABLE = os.getenv("DATABASE_RECEIPTS_TABLE", "receipts").strip()
+DATABASE_RECEIPT_ITEMS_TABLE = os.getenv(
+    "DATABASE_RECEIPT_ITEMS_TABLE", "receipt_items"
+).strip()
+DATABASE_AUDIT_LOGS_TABLE = os.getenv(
+    "DATABASE_AUDIT_LOGS_TABLE", "audit_logs"
+).strip()
+
+# ---- Supabase Auth ----
+# Publishable/anon key digunakan hanya untuk endpoint Auth Supabase. Session token
+# disimpan oleh FastAPI pada cookie HttpOnly dan tidak tersedia bagi JavaScript.
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL",
+    os.getenv("NEXT_PUBLIC_SUPABASE_URL", ""),
+).strip().rstrip("/")
+SUPABASE_PUBLISHABLE_KEY = os.getenv(
+    "SUPABASE_PUBLISHABLE_KEY",
+    os.getenv(
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        os.getenv("SUPABASE_ANON_KEY", ""),
+    ),
+).strip()
+AUTH_ACCESS_COOKIE_NAME = os.getenv(
+    "AUTH_ACCESS_COOKIE_NAME", "catatkas_access_token"
+).strip()
+AUTH_REFRESH_COOKIE_NAME = os.getenv(
+    "AUTH_REFRESH_COOKIE_NAME", "catatkas_refresh_token"
+).strip()
+AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "false").lower() in {
+    "1", "true", "yes", "on"
+}
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "lax").strip().lower()
+AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS = int(
+    os.getenv("AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS", "2592000")
+)
+AUDIT_LOG_ENABLED = os.getenv("AUDIT_LOG_ENABLED", "true").lower() in {
+    "1", "true", "yes", "on"
+}
+
 # ---- Soft Prompt Tuning (PEFT) ----
 NUM_VIRTUAL_TOKENS = 20
 PROMPT_TUNING_INIT_TEXT = (
@@ -53,6 +106,9 @@ MAX_SEQ_LENGTH = 256
 
 # ---- Inference ----
 MAX_NEW_TOKENS = 256
+MODEL_WARMUP_ON_STARTUP = os.getenv("MODEL_WARMUP_ON_STARTUP", "false").lower() in {
+    "1", "true", "yes", "on"
+}
 
 # ---- Speech-to-text (faster-whisper) ----
 # Whisper sengaja berjalan di CPU secara default agar tidak berebut VRAM dengan Llama.
@@ -67,6 +123,13 @@ WHISPER_VAD_FILTER = os.getenv("WHISPER_VAD_FILTER", "true").lower() in {
 # Batas request audio. Nilai environment variable dinyatakan dalam MB.
 AUDIO_MAX_SIZE_MB = int(os.getenv("AUDIO_MAX_SIZE_MB", "10"))
 AUDIO_MAX_SIZE_BYTES = AUDIO_MAX_SIZE_MB * 1024 * 1024
+VOICE_LLM_NORMALIZATION_ENABLED = os.getenv(
+    "VOICE_LLM_NORMALIZATION_ENABLED",
+    "true",
+).lower() in {"1", "true", "yes", "on"}
+VOICE_LLM_NORMALIZATION_MAX_NEW_TOKENS = int(
+    os.getenv("VOICE_LLM_NORMALIZATION_MAX_NEW_TOKENS", "96")
+)
 
 # ---- Receipt OCR (PaddleOCR) ----
 # OCR nota dimuat secara lazy. Paket CPU digunakan agar tidak mengambil VRAM Llama.
@@ -84,6 +147,10 @@ RECEIPT_MAX_IMAGE_PIXELS = int(os.getenv("RECEIPT_MAX_IMAGE_PIXELS", "25000000")
 RECEIPT_OCR_MULTIPASS = os.getenv("RECEIPT_OCR_MULTIPASS", "true").lower() in {
     "1", "true", "yes", "on",
 }
+RECEIPT_OCR_COMPACT_FOR_MODEL = os.getenv(
+    "RECEIPT_OCR_COMPACT_FOR_MODEL",
+    "true",
+).lower() in {"1", "true", "yes", "on"}
 RECEIPT_OCR_DET_BOX_THRESHOLD = float(
     os.getenv("RECEIPT_OCR_DET_BOX_THRESHOLD", "0.30")
 )

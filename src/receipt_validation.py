@@ -57,10 +57,17 @@ def validate_receipt_semantics(
 
     total = llama_receipt.get("total")
     if subtotal is not None and total is not None:
+        tax_is_included = bool(
+            re.search(
+                r"\bPPN\b.*\bDPP\b|\bDPP\b.*\bPPN\b",
+                ocr_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+        )
         expected_total = (
             subtotal
             - (llama_receipt.get("discount") or 0)
-            + (llama_receipt.get("tax") or 0)
+            + (0 if tax_is_included else (llama_receipt.get("tax") or 0))
             + (llama_receipt.get("service_charge") or 0)
         )
         if amounts_differ(expected_total, total):

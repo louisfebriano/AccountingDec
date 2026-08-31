@@ -68,6 +68,7 @@ class ReceiptServiceTests(unittest.TestCase):
         ):
             result = receipt_service.extract_receipt(Path("unused.jpg"))
         self.assertEqual(result["ocr_text"], "")
+        self.assertEqual(result["ocr_model_text"], "")
         self.assertFalse(processed_path.exists())
 
     def test_preprocessed_file_is_deleted_after_ocr_failure(self):
@@ -110,6 +111,7 @@ class ReceiptServiceTests(unittest.TestCase):
             result = receipt_service.extract_receipt(Path("unused.jpg"))
         self.assertEqual(result["ocr_diagnostics"]["selected_pass"], 1)
         self.assertIn("Melon", result["ocr_text"])
+        self.assertIn("Melon", result["ocr_model_text"])
         self.assertFalse(processed_path.exists())
         self.assertFalse(threshold_path.exists())
 

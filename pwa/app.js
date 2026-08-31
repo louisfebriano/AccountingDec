@@ -1,4 +1,20 @@
-import { ApiError, extractAudio, extractReceipt, extractText, getLocalReferenceDate } from "/api.js?v=16";
+import {
+  ApiError,
+  clearTransactionsRemote,
+  createTransactionRemote,
+  deleteTransactionRemote,
+  extractAudio,
+  extractReceipt,
+  extractText,
+  getCurrentUser,
+  getLocalReferenceDate,
+  listTransactions,
+  loginAccount,
+  logoutAccount,
+  refreshSession,
+  registerAccount,
+  updateTransactionRemote,
+} from "/api.js?v=18";
 import {
   aggregateTransactionsByPeriod,
   describeChartPoint,
@@ -22,12 +38,33 @@ import {
   deleteTransaction,
   loadHistory,
   recordSuccessfulResponse,
+  saveHistory,
+  setHistoryUser,
   updateTransaction,
-} from "/storage.js?v=16";
+} from "/storage.js?v=19";
 import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=16";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
+  authScreen: $("#auth-screen"),
+  authLoading: $("#auth-loading"),
+  authContent: $("#auth-content"),
+  authStatus: $("#auth-status"),
+  loginTab: $("#login-tab"),
+  registerTab: $("#register-tab"),
+  loginPanel: $("#login-panel"),
+  registerPanel: $("#register-panel"),
+  loginForm: $("#login-form"),
+  loginEmail: $("#login-email"),
+  loginPassword: $("#login-password"),
+  loginSubmit: $("#login-submit"),
+  registerForm: $("#register-form"),
+  registerEmail: $("#register-email"),
+  registerPassword: $("#register-password"),
+  registerPasswordConfirmation: $("#register-password-confirmation"),
+  registerSubmit: $("#register-submit"),
+  authUserEmail: $("#auth-user-email"),
+  logoutButton: $("#logout-button"),
   connection: $("#connection-status"),
   connectionLabel: $("#connection-label"),
   offlineBanner: $("#offline-banner"),
@@ -125,25 +162,16 @@ const elements = {
   detailNormalizedText: $("#detail-normalized-text"),
   detailReceiptSection: $("#detail-receipt-section"),
   detailReceiptMerchant: $("#detail-receipt-merchant"),
-  detailReceiptNumber: $("#detail-receipt-number"),
-  detailReceiptSubtotal: $("#detail-receipt-subtotal"),
-  detailReceiptDiscount: $("#detail-receipt-discount"),
-  detailReceiptTax: $("#detail-receipt-tax"),
-  detailReceiptService: $("#detail-receipt-service"),
   detailReceiptItems: $("#detail-receipt-items"),
   receiptConfirmDialog: $("#receipt-confirm-dialog"),
   closeReceiptConfirmButton: $("#close-receipt-confirm-button"),
   receiptConfirmForm: $("#receipt-confirm-form"),
   receiptConfirmMerchant: $("#receipt-confirm-merchant"),
-  receiptConfirmNumber: $("#receipt-confirm-number"),
   receiptConfirmDate: $("#receipt-confirm-date"),
-  receiptConfirmTotal: $("#receipt-confirm-total"),
-  receiptTotalCandidates: $("#receipt-total-candidates"),
-  receiptTotalCandidateButtons: $("#receipt-total-candidate-buttons"),
-  receiptWarningBox: $("#receipt-warning-box"),
-  receiptWarningList: $("#receipt-warning-list"),
+  receiptConfirmCalculatedTotal: $("#receipt-confirm-calculated-total"),
   receiptConfirmItems: $("#receipt-confirm-items"),
   receiptConfirmEmptyItems: $("#receipt-confirm-empty-items"),
+  receiptAddItemButton: $("#receipt-add-item-button"),
   receiptOcrText: $("#receipt-ocr-text"),
   receiptConfirmError: $("#receipt-confirm-error"),
   receiptRetakeButton: $("#receipt-retake-button"),
@@ -160,11 +188,17 @@ const elements = {
   manualUnit: $("#manual-unit"),
   manualNote: $("#manual-note"),
   manualFormError: $("#manual-form-error"),
+  actionPopup: $("#action-popup"),
+  actionPopupIcon: $("#action-popup-icon"),
+  actionPopupMessage: $("#action-popup-message"),
+  actionPopupClose: $("#action-popup-close"),
 };
 
 const gate = new RequestGate();
 const recorder = new RecorderSession();
-let history = loadHistory();
+let history = [];
+let databaseEnabled = false;
+let currentUser = null;
 let activeTransactionId = null;
 let editingTransactionId = null;
 let installPrompt = null;
@@ -177,11 +211,164 @@ let receiptPreviewUrl = null;
 let pendingReceipt = null;
 let activeTheme = applyTheme(loadTheme());
 let chartTooltipPinned = false;
+let actionPopupTimeout = null;
 
 function setStatus(message, kind = "") {
   elements.requestStatus.textContent = message;
   elements.requestStatus.dataset.kind = kind;
 }
+
+function setAuthStatus(message, kind = "") {
+  elements.authStatus.textContent = message;
+  elements.authStatus.dataset.kind = kind;
+}
+
+function hideActionPopup() {
+  if (actionPopupTimeout) clearTimeout(actionPopupTimeout);
+  actionPopupTimeout = null;
+  elements.actionPopup.classList.remove("is-visible");
+  elements.actionPopup.hidden = true;
+}
+
+function showActionPopup(message, kind = "success") {
+  if (actionPopupTimeout) clearTimeout(actionPopupTimeout);
+  elements.actionPopupMessage.textContent = message;
+  elements.actionPopupIcon.textContent = kind === "delete" ? "×" : "✓";
+  elements.actionPopup.dataset.kind = kind;
+  elements.actionPopup.hidden = false;
+  requestAnimationFrame(() => elements.actionPopup.classList.add("is-visible"));
+  actionPopupTimeout = setTimeout(hideActionPopup, 3500);
+}
+
+elements.actionPopupClose.addEventListener("click", hideActionPopup);
+
+function switchAuthTab(mode) {
+  const loginActive = mode === "login";
+  elements.loginTab.classList.toggle("is-active", loginActive);
+  elements.registerTab.classList.toggle("is-active", !loginActive);
+  elements.loginTab.setAttribute("aria-selected", String(loginActive));
+  elements.registerTab.setAttribute("aria-selected", String(!loginActive));
+  elements.loginPanel.hidden = !loginActive;
+  elements.registerPanel.hidden = loginActive;
+  setAuthStatus("");
+}
+
+function setAuthBusy(busy) {
+  elements.loginSubmit.disabled = busy;
+  elements.registerSubmit.disabled = busy;
+  elements.loginSubmit.classList.toggle("is-loading", busy && !elements.loginPanel.hidden);
+  elements.registerSubmit.classList.toggle("is-loading", busy && !elements.registerPanel.hidden);
+  elements.loginTab.disabled = busy;
+  elements.registerTab.disabled = busy;
+}
+
+function showAuthentication() {
+  currentUser = null;
+  databaseEnabled = false;
+  history = [];
+  setHistoryUser(null);
+  document.body.dataset.authState = "unauthenticated";
+  elements.authLoading.hidden = true;
+  elements.authContent.hidden = false;
+  elements.loginPassword.value = "";
+  elements.registerPassword.value = "";
+  elements.registerPasswordConfirmation.value = "";
+  switchAuthTab("login");
+}
+
+async function enterAuthenticatedApp(user) {
+  if (!user?.id) throw new Error("User ID Supabase tidak tersedia.");
+  currentUser = user;
+  databaseEnabled = false;
+  setHistoryUser(user.id);
+  history = loadHistory();
+  elements.authUserEmail.textContent = user.email || user.id;
+  document.body.dataset.authState = "loading";
+  elements.authLoading.hidden = false;
+  elements.authContent.hidden = true;
+  renderAll();
+  await initializeDatabaseHistory();
+  document.body.dataset.authState = "authenticated";
+  updateConnection();
+}
+
+async function initializeAuthentication() {
+  document.body.dataset.authState = "loading";
+  elements.authLoading.hidden = false;
+  elements.authContent.hidden = true;
+  try {
+    let session;
+    try {
+      session = await getCurrentUser();
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) throw error;
+      await refreshSession();
+      session = await getCurrentUser();
+    }
+    await enterAuthenticatedApp(session.user);
+  } catch (error) {
+    showAuthentication();
+    if (!(error instanceof ApiError && error.status === 401)) {
+      setAuthStatus(error.message || "Autentikasi belum dapat digunakan.", "error");
+    }
+  }
+}
+
+elements.loginTab.addEventListener("click", () => switchAuthTab("login"));
+elements.registerTab.addEventListener("click", () => switchAuthTab("register"));
+
+elements.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setAuthBusy(true);
+  setAuthStatus("Memeriksa akun…");
+  try {
+    const result = await loginAccount(
+      elements.loginEmail.value.trim(),
+      elements.loginPassword.value,
+    );
+    await enterAuthenticatedApp(result.user);
+    elements.loginForm.reset();
+    setStatus("Login berhasil. Riwayat akun Anda telah dimuat.", "success");
+  } catch (error) {
+    setAuthStatus(error.message || "Login gagal.", "error");
+  } finally {
+    setAuthBusy(false);
+  }
+});
+
+elements.registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (elements.registerPassword.value !== elements.registerPasswordConfirmation.value) {
+    setAuthStatus("Konfirmasi password tidak sama.", "error");
+    return;
+  }
+  setAuthBusy(true);
+  setAuthStatus("Membuat akun…");
+  try {
+    const result = await registerAccount(
+      elements.registerEmail.value.trim(),
+      elements.registerPassword.value,
+    );
+    if (result.authenticated) {
+      await enterAuthenticatedApp(result.user);
+      elements.registerForm.reset();
+      setStatus("Akun berhasil dibuat dan login aktif.", "success");
+    } else {
+      const registeredEmail = elements.registerEmail.value.trim();
+      elements.registerForm.reset();
+      switchAuthTab("login");
+      elements.loginEmail.value = registeredEmail;
+      setAuthStatus(
+        "Akun berhasil dibuat. Periksa email untuk konfirmasi, kemudian login.",
+        "success",
+      );
+    }
+  } catch (error) {
+    setAuthStatus(error.message || "Registrasi gagal.", "error");
+  } finally {
+    setAuthBusy(false);
+  }
+});
 
 function updateThemeButton() {
   const nextLabel = activeTheme === "dark" ? "Aktifkan tema putih" : "Aktifkan mode gelap";
@@ -215,6 +402,7 @@ function setBusy(busy, mode = "text") {
   elements.receiptFile.disabled = busy;
   elements.receiptSubmit.disabled = busy || !navigator.onLine || !selectedReceiptFile;
   elements.receiptSubmit.classList.toggle("is-loading", busy && mode === "receipt");
+  elements.addManualButton.disabled = busy || !navigator.onLine || !databaseEnabled;
   elements.tabs.forEach((tab) => { tab.disabled = busy; });
 }
 
@@ -233,7 +421,7 @@ function updateConnection() {
   elements.connectionLabel.textContent = online ? "Online" : "Offline";
   elements.offlineBanner.hidden = online;
   setBusy(gate.busy);
-  if (!online) setStatus("Koneksi server diperlukan untuk input teks, suara, atau Scan Nota. Transaksi manual tetap tersedia.", "warning");
+  if (!online) setStatus("Koneksi server diperlukan untuk membaca atau menyimpan transaksi Supabase.", "warning");
 }
 
 function switchTab(selectedTab) {
@@ -429,16 +617,44 @@ function renderResult(record) {
   elements.resultCard.hidden = false;
 }
 
-function acceptSuccess(response, source, originalText) {
-  const saved = recordSuccessfulResponse(response, source, originalText);
+async function persistCreatedRecord(saved, previousHistory) {
+  if (!databaseEnabled) {
+    saveHistory(previousHistory);
+    throw new ApiError("Database Supabase belum siap. Transaksi tidak disimpan.", 503);
+  }
+  try {
+    const record = await createTransactionRemote(saved.record);
+    const historyWithoutLocalRecord = saved.history.filter((item) => item.id !== saved.record.id);
+    const nextHistory = saveHistory([record, ...historyWithoutLocalRecord]);
+    return { record: nextHistory[0], history: nextHistory };
+  } catch (error) {
+    saveHistory(previousHistory);
+    throw error;
+  }
+}
+
+async function acceptSuccess(response, source, originalText) {
+  const previousHistory = [...history];
+  const local = recordSuccessfulResponse(response, source, originalText);
+  const saved = await persistCreatedRecord(local, previousHistory);
   history = saved.history;
   renderResult(saved.record);
   renderAll();
-  setStatus("Transaksi berhasil dicatat pada perangkat ini.", "success");
+  setStatus(
+    databaseEnabled
+      ? "Transaksi berhasil disimpan ke Supabase."
+      : "Transaksi berhasil dicatat pada perangkat ini.",
+    "success",
+  );
 }
 
 function humanizeError(error, mode = "text") {
   if (!navigator.onLine) return "Anda sedang offline. Sambungkan perangkat untuk memproses transaksi.";
+  if (error instanceof ApiError && error.status === 401) {
+    showAuthentication();
+    setAuthStatus("Sesi telah berakhir. Silakan login kembali.", "error");
+    return "Sesi telah berakhir. Silakan login kembali.";
+  }
   if (error instanceof ApiError) return error.message;
   if (error?.name === "NotAllowedError") return "Izin mikrofon ditolak. Izinkan mikrofon melalui pengaturan browser.";
   if (error?.name === "NotFoundError") return "Mikrofon tidak ditemukan pada perangkat ini.";
@@ -460,7 +676,7 @@ elements.textForm.addEventListener("submit", async (event) => {
     setStatus("Sedang memproses kalimat transaksi…");
     try {
       const response = await extractText(text);
-      acceptSuccess(response, "text", response.input || text);
+      await acceptSuccess(response, "text", response.input || text);
       elements.textInput.value = "";
       elements.characterCount.textContent = "0";
     } catch (error) {
@@ -489,9 +705,8 @@ function clearReceiptPreview() {
 function clearReceiptConfirmation() {
   pendingReceipt = null;
   elements.receiptOcrText.textContent = "";
-  elements.receiptWarningList.replaceChildren();
   elements.receiptConfirmItems.replaceChildren();
-  elements.receiptTotalCandidateButtons.replaceChildren();
+  elements.receiptConfirmCalculatedTotal.textContent = formatRupiah(0);
   elements.receiptConfirmError.textContent = "";
 }
 
@@ -536,44 +751,174 @@ function appendReceiptItems(container, items) {
   });
 }
 
+function receiptEditorNumber(value, { allowZero = false } = {}) {
+  if (value === null || value === undefined || value === "") return "";
+  const number = Number(value);
+  if (!Number.isFinite(number) || (allowZero ? number < 0 : number <= 0)) return "";
+  return String(number);
+}
+
+function createReceiptEditorField(labelText, fieldName, input) {
+  const label = document.createElement("label");
+  label.className = `receipt-item-editor-field receipt-item-editor-${fieldName.replace("_", "-")}`;
+  const caption = document.createElement("span");
+  caption.textContent = labelText;
+  input.dataset.receiptField = fieldName;
+  label.append(caption, input);
+  return label;
+}
+
+function updateReceiptEditorTotal() {
+  const rows = [...elements.receiptConfirmItems.querySelectorAll("[data-receipt-item-row]")];
+  const total = rows.reduce((sum, row) => {
+    const value = Number(row.querySelector('[data-receipt-field="line_total"]')?.value);
+    return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+  }, 0);
+  elements.receiptConfirmCalculatedTotal.textContent = formatRupiah(total);
+  elements.receiptConfirmEmptyItems.hidden = rows.length > 0;
+}
+
+function appendReceiptItemEditor(item = {}) {
+  const row = document.createElement("div");
+  row.className = "receipt-item-editor-row";
+  row.dataset.receiptItemRow = "true";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.maxLength = 200;
+  nameInput.required = true;
+  nameInput.placeholder = "Nama barang";
+  nameInput.value = item.item_name || "";
+
+  const quantityInput = document.createElement("input");
+  quantityInput.type = "number";
+  quantityInput.min = "0.001";
+  quantityInput.step = "any";
+  quantityInput.inputMode = "decimal";
+  quantityInput.placeholder = "Opsional";
+  quantityInput.value = receiptEditorNumber(item.quantity);
+
+  const unitInput = document.createElement("input");
+  unitInput.type = "text";
+  unitInput.maxLength = 50;
+  unitInput.placeholder = "kg, pcs, botol";
+  unitInput.value = item.unit || "";
+
+  const unitPriceInput = document.createElement("input");
+  unitPriceInput.type = "number";
+  unitPriceInput.min = "0";
+  unitPriceInput.step = "1";
+  unitPriceInput.inputMode = "numeric";
+  unitPriceInput.placeholder = "Opsional";
+  unitPriceInput.value = receiptEditorNumber(item.unit_price, { allowZero: true });
+
+  const detectedLineTotal = receiptEditorNumber(item.line_total);
+  const calculatedLineTotal = quantityInput.value && unitPriceInput.value
+    ? String(Math.round(Number(quantityInput.value) * Number(unitPriceInput.value)))
+    : "";
+  const lineTotalInput = document.createElement("input");
+  lineTotalInput.type = "number";
+  lineTotalInput.min = "1";
+  lineTotalInput.step = "1";
+  lineTotalInput.inputMode = "numeric";
+  lineTotalInput.required = true;
+  lineTotalInput.placeholder = "Wajib diisi";
+  lineTotalInput.value = detectedLineTotal || calculatedLineTotal;
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "receipt-item-remove-button";
+  removeButton.textContent = "Hapus barang";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    updateReceiptEditorTotal();
+  });
+
+  const syncLineTotal = () => {
+    const quantity = Number(quantityInput.value);
+    const unitPrice = Number(unitPriceInput.value);
+    if (
+      quantityInput.value !== ""
+      && unitPriceInput.value !== ""
+      && quantity > 0
+      && Number.isFinite(unitPrice)
+      && unitPrice >= 0
+    ) {
+      lineTotalInput.value = String(Math.round(quantity * unitPrice));
+    }
+    updateReceiptEditorTotal();
+  };
+  quantityInput.addEventListener("input", syncLineTotal);
+  unitPriceInput.addEventListener("input", syncLineTotal);
+  lineTotalInput.addEventListener("input", updateReceiptEditorTotal);
+
+  row.append(
+    createReceiptEditorField("Nama barang", "item_name", nameInput),
+    createReceiptEditorField("Quantity", "quantity", quantityInput),
+    createReceiptEditorField("Unit", "unit", unitInput),
+    createReceiptEditorField("Harga satuan", "unit_price", unitPriceInput),
+    createReceiptEditorField("Total harga barang", "line_total", lineTotalInput),
+    removeButton,
+  );
+  elements.receiptConfirmItems.append(row);
+  updateReceiptEditorTotal();
+}
+
+function renderReceiptItemEditors(items) {
+  elements.receiptConfirmItems.replaceChildren();
+  if (items.length === 0) appendReceiptItemEditor();
+  else items.forEach((item) => appendReceiptItemEditor(item));
+  updateReceiptEditorTotal();
+}
+
+function collectReceiptEditorItems() {
+  const rows = [...elements.receiptConfirmItems.querySelectorAll("[data-receipt-item-row]")];
+  if (rows.length === 0) throw new Error("Tambahkan minimal satu barang dari nota.");
+  return rows.map((row, index) => {
+    const field = (name) => row.querySelector(`[data-receipt-field="${name}"]`)?.value.trim() || "";
+    const itemName = field("item_name");
+    if (!itemName) throw new Error(`Nama barang ke-${index + 1} wajib diisi.`);
+
+    const quantityText = field("quantity");
+    const quantity = quantityText === "" ? null : Number(quantityText);
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0)) {
+      throw new Error(`Quantity barang ke-${index + 1} harus lebih besar dari nol.`);
+    }
+
+    const unitPriceText = field("unit_price");
+    const unitPrice = unitPriceText === "" ? null : Number(unitPriceText);
+    if (unitPrice !== null && (!Number.isFinite(unitPrice) || unitPrice < 0)) {
+      throw new Error(`Harga satuan barang ke-${index + 1} tidak valid.`);
+    }
+
+    const lineTotal = Number(field("line_total"));
+    if (!Number.isFinite(lineTotal) || lineTotal <= 0) {
+      throw new Error(`Total harga barang ke-${index + 1} wajib lebih besar dari nol.`);
+    }
+    return {
+      item_name: itemName,
+      quantity,
+      unit: field("unit") || null,
+      unit_price: unitPrice,
+      line_total: Math.round(lineTotal),
+    };
+  });
+}
+
 function renderReceiptConfirmation(response) {
   pendingReceipt = response;
   const receipt = response.data.receipt;
   const items = Array.isArray(receipt.items) ? receipt.items : [];
-  const warnings = Array.isArray(receipt.warnings) ? receipt.warnings : [];
-  const candidates = [...new Set((response.total_candidates || []).map(Number).filter(Number.isFinite))];
 
   elements.receiptConfirmMerchant.textContent = receipt.merchant_name || EMPTY_VALUE;
-  elements.receiptConfirmNumber.textContent = receipt.receipt_number || EMPTY_VALUE;
-  elements.receiptConfirmDate.value = response.data.date || "";
-  elements.receiptConfirmTotal.value = response.data.total_price || candidates[0] || "";
+  elements.receiptConfirmDate.value = getLocalReferenceDate();
   elements.receiptConfirmError.textContent = "";
   elements.receiptOcrText.textContent = response.ocr_text || "";
-
-  elements.receiptTotalCandidateButtons.replaceChildren();
-  candidates.forEach((candidate) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "receipt-candidate-button";
-    button.textContent = formatRupiah(candidate);
-    button.addEventListener("click", () => {
-      elements.receiptConfirmTotal.value = String(candidate);
-    });
-    elements.receiptTotalCandidateButtons.append(button);
-  });
-  elements.receiptTotalCandidates.hidden = candidates.length < 2;
-
-  elements.receiptWarningList.replaceChildren();
-  warnings.forEach((warning) => {
-    const item = document.createElement("li");
-    item.textContent = warning;
-    elements.receiptWarningList.append(item);
-  });
-  elements.receiptWarningBox.hidden = warnings.length === 0;
-  appendReceiptItems(elements.receiptConfirmItems, items);
-  elements.receiptConfirmEmptyItems.hidden = items.length > 0;
+  renderReceiptItemEditors(items);
   showDialog(elements.receiptConfirmDialog);
 }
+
+elements.receiptAddItemButton.addEventListener("click", () => appendReceiptItemEditor());
 
 elements.receiptFile.addEventListener("change", () => {
   const file = elements.receiptFile.files?.[0] || null;
@@ -657,23 +1002,26 @@ elements.receiptRetakeButton.addEventListener("click", () => {
   elements.receiptFile.click();
 });
 
-elements.receiptConfirmForm.addEventListener("submit", (event) => {
+elements.receiptConfirmForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!pendingReceipt) {
     elements.receiptConfirmError.textContent = "Hasil nota sudah tidak tersedia. Scan ulang foto nota.";
     return;
   }
   try {
-    const saved = createReceiptTransaction(pendingReceipt, {
+    const previousHistory = [...history];
+    const local = createReceiptTransaction(pendingReceipt, {
       date: elements.receiptConfirmDate.value,
-      total_price: elements.receiptConfirmTotal.value,
+      items: collectReceiptEditorItems(),
     });
+    const saved = await persistCreatedRecord(local, previousHistory);
     history = saved.history;
     renderResult(saved.record);
     closeDialog(elements.receiptConfirmDialog);
     resetReceiptSelection();
     renderAll();
     setStatus("Nota dikonfirmasi dan disimpan sebagai satu transaksi pengeluaran.", "success");
+    showActionPopup("Transaksi nota berhasil disimpan.");
   } catch (error) {
     elements.receiptConfirmError.textContent = error.message;
   }
@@ -703,7 +1051,7 @@ async function stopAndUploadRecording() {
   elements.voiceStatus.textContent = "Audio sedang diproses…";
   setStatus("Mengunggah dan memproses suara…");
   const response = await extractAudio(blob);
-  acceptSuccess(response, "voice", response.transcript || "");
+  await acceptSuccess(response, "voice", response.transcript || "");
   elements.voiceStatus.textContent = response.transcript
     ? `Transkrip: ${response.transcript}`
     : "Transaksi suara berhasil diproses.";
@@ -784,14 +1132,24 @@ elements.settingsDialog.addEventListener("cancel", (event) => {
   closeDialog(elements.settingsDialog);
 });
 
-function requestClearHistory() {
+async function requestClearHistory() {
   if (history.length === 0) return;
-  if (!window.confirm("Hapus seluruh riwayat transaksi yang tersimpan di perangkat ini?")) return;
-  clearHistory();
-  history = [];
-  closeDialog(elements.settingsDialog);
-  renderAll();
-  setStatus("Riwayat lokal telah dihapus.", "success");
+  if (!databaseEnabled) {
+    setStatus("Database Supabase belum siap. Riwayat tidak dihapus.", "error");
+    return;
+  }
+  const location = "akun Supabase Anda";
+  if (!window.confirm(`Hapus seluruh riwayat transaksi pada ${location}?`)) return;
+  try {
+    await clearTransactionsRemote();
+    clearHistory();
+    history = [];
+    closeDialog(elements.settingsDialog);
+    renderAll();
+    setStatus(`Riwayat di ${location} telah dihapus.`, "success");
+  } catch (error) {
+    setStatus(humanizeError(error), "error");
+  }
 }
 
 elements.clearHistoryButton.addEventListener("click", requestClearHistory);
@@ -819,19 +1177,6 @@ function openTransactionDetail(id) {
   elements.detailReceiptSection.hidden = !isReceipt;
   if (isReceipt) {
     elements.detailReceiptMerchant.textContent = record.receipt.merchant_name || EMPTY_VALUE;
-    elements.detailReceiptNumber.textContent = record.receipt.receipt_number || EMPTY_VALUE;
-    elements.detailReceiptSubtotal.textContent = record.receipt.subtotal == null
-      ? EMPTY_VALUE
-      : formatRupiah(record.receipt.subtotal);
-    elements.detailReceiptDiscount.textContent = record.receipt.discount == null
-      ? EMPTY_VALUE
-      : formatRupiah(record.receipt.discount);
-    elements.detailReceiptTax.textContent = record.receipt.tax == null
-      ? EMPTY_VALUE
-      : formatRupiah(record.receipt.tax);
-    elements.detailReceiptService.textContent = record.receipt.service_charge == null
-      ? EMPTY_VALUE
-      : formatRupiah(record.receipt.service_charge);
     appendReceiptItems(elements.detailReceiptItems, record.receipt.items || []);
     if ((record.receipt.items || []).length === 0) {
       const empty = document.createElement("li");
@@ -891,22 +1236,26 @@ elements.editTransactionButton.addEventListener("click", () => {
   openTransactionForm(record);
 });
 
-elements.deleteTransactionButton.addEventListener("click", () => {
+elements.deleteTransactionButton.addEventListener("click", async () => {
   const record = history.find((transaction) => transaction.id === activeTransactionId);
   if (!record) return;
   if (!window.confirm(`Hapus transaksi ${transactionTitle(record)}?`)) return;
   try {
+    if (!databaseEnabled) throw new ApiError("Database Supabase belum siap.", 503);
+    await deleteTransactionRemote(record.id);
     history = deleteTransaction(record.id);
     closeTransactionDetail();
     renderAll();
-    setStatus("Transaksi telah dihapus dari perangkat ini.", "success");
+    setStatus("Transaksi telah dihapus dari Supabase.", "success");
+    showActionPopup("Transaksi berhasil dihapus.", "delete");
   } catch (error) {
     setStatus(error.message, "error");
   }
 });
 
-elements.manualTransactionForm.addEventListener("submit", (event) => {
+elements.manualTransactionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const isEditing = Boolean(editingTransactionId);
   const input = {
     transaction_type: elements.manualTransactionType.value,
     date: elements.manualDate.value,
@@ -918,15 +1267,35 @@ elements.manualTransactionForm.addEventListener("submit", (event) => {
   };
 
   try {
-    const saved = editingTransactionId
+    const previousHistory = [...history];
+    const local = editingTransactionId
       ? updateTransaction(editingTransactionId, input)
       : createManualTransaction(input);
-    const action = editingTransactionId ? "diperbarui" : "ditambahkan";
+    const action = isEditing ? "diperbarui" : "ditambahkan";
+    let saved = local;
+    if (databaseEnabled && editingTransactionId) {
+      try {
+        const record = await updateTransactionRemote(editingTransactionId, input);
+        const nextHistory = local.history.map((item) => (
+          item.id === editingTransactionId ? record : item
+        ));
+        saved = { record, history: saveHistory(nextHistory) };
+      } catch (error) {
+        saveHistory(previousHistory);
+        throw error;
+      }
+    } else if (databaseEnabled) {
+      saved = await persistCreatedRecord(local, previousHistory);
+    } else {
+      saveHistory(previousHistory);
+      throw new ApiError("Database Supabase belum siap. Transaksi tidak disimpan.", 503);
+    }
     history = saved.history;
     renderResult(saved.record);
     closeTransactionForm();
     renderAll();
     setStatus(`Transaksi berhasil ${action}.`, "success");
+    if (isEditing) showActionPopup("Perubahan transaksi berhasil disimpan.");
   } catch (error) {
     elements.manualFormError.textContent = error.message;
   }
@@ -993,6 +1362,40 @@ window.addEventListener("appinstalled", () => {
 window.addEventListener("online", updateConnection);
 window.addEventListener("offline", updateConnection);
 
+async function initializeDatabaseHistory() {
+  try {
+    const remoteHistory = await listTransactions();
+    databaseEnabled = true;
+    history = saveHistory(remoteHistory);
+    renderAll();
+    setStatus("Riwayat Supabase berhasil dimuat.", "success");
+  } catch (error) {
+    databaseEnabled = false;
+    setStatus(
+      error instanceof ApiError
+        ? `${error.message} Cache akun hanya dapat dibaca; perubahan dinonaktifkan.`
+        : "Supabase belum dapat dijangkau. Cache akun hanya dapat dibaca.",
+      "warning",
+    );
+    renderAll();
+  }
+}
+
+elements.logoutButton.addEventListener("click", async () => {
+  elements.logoutButton.disabled = true;
+  try {
+    await logoutAccount();
+    closeDialog(elements.settingsDialog);
+    elements.resultCard.hidden = true;
+    showAuthentication();
+    setAuthStatus("Anda telah logout.", "success");
+  } catch (error) {
+    setStatus(error.message || "Logout gagal.", "error");
+  } finally {
+    elements.logoutButton.disabled = false;
+  }
+});
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
@@ -1013,3 +1416,4 @@ if (!recorder.supported) {
 
 renderAll();
 updateConnection();
+initializeAuthentication();

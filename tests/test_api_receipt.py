@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from starlette.datastructures import Headers, UploadFile
 
 from src import api
@@ -25,7 +25,10 @@ def make_upload(
 
 def parsed_receipt():
     return {
-        "ocr_text": "TOKO MAKMUR\nTOTAL 180.000\n26/08/2026",
+        "ocr_text": (
+            "TOKO MAKMUR\nJl. Contoh No. 10\nTOTAL 180.000\n26/08/2026"
+        ),
+        "ocr_model_text": "TOKO MAKMUR\nTOTAL 180.000\n26/08/2026",
         "date": "2026-08-26",
         "total_candidates": [180000],
         "receipt": {
@@ -64,6 +67,42 @@ def semantic_receipt(total=180000):
 
 
 class ReceiptEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_receipt_input_and_ocr_text_are_added_to_audit_metadata(self):
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/extract/receipt",
+                "headers": [],
+            }
+        )
+        with (
+            patch.object(api, "validate_receipt_image"),
+            patch.object(api, "extract_receipt", return_value=parsed_receipt()),
+            patch.object(
+                api,
+                "extract_receipt_with_llama",
+                return_value=semantic_receipt(),
+            ),
+        ):
+            await api.extract_receipt_endpoint(
+                make_upload(),
+                "2026-08-26",
+                request=request,
+            )
+
+        metadata = request.state.audit_metadata
+        self.assertEqual(metadata["method"], "receipt")
+        self.assertEqual(metadata["input"]["ocr_text"], parsed_receipt()["ocr_text"])
+        self.assertFalse(metadata["input"]["ocr_text_truncated"])
+        self.assertEqual(
+            metadata["input"]["ocr_model_text"],
+            parsed_receipt()["ocr_model_text"],
+        )
+        self.assertTrue(metadata["input"]["ocr_compacted"])
+        self.assertEqual(metadata["input"]["image"]["format"], "JPEG")
+        self.assertGreater(metadata["input"]["image"]["size_bytes"], 0)
+
     async def test_accepts_jpeg_png_and_webp(self):
         cases = (
             ("nota.jpg", "image/jpeg", "JPEG"),
@@ -97,17 +136,53 @@ class ReceiptEndpointTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(response["requires_confirmation"])
                 self.assertEqual(response["data"]["transaction_type"], "expense")
                 self.assertEqual(response["data"]["total_price"], 180000)
+                self.assertNotIn("total_candidates", response)
+                for unused_field in (
+                    "receipt_number",
+                    "subtotal",
+                    "discount",
+                    "tax",
+                    "service_charge",
+                ):
+                    self.assertNotIn(unused_field, response["data"]["receipt"])
                 self.assertEqual(
                     response["extraction_method"],
                     "llama_soft_prompt_receipt",
                 )
                 self.assertEqual(response["validation"]["status"], "valid")
                 semantic.assert_called_once_with(
-                    parsed_receipt()["ocr_text"],
+                    parsed_receipt()["ocr_model_text"],
                     api.date(2026, 8, 26),
                     parsed_receipt(),
                 )
+                self.assertEqual(
+                    response["ocr_model_text"],
+                    parsed_receipt()["ocr_model_text"],
+                )
                 self.assertFalse(captured_paths[0].exists())
+
+    async def test_can_disable_model_ocr_compaction(self):
+        with (
+            patch.object(api, "validate_receipt_image"),
+            patch.object(api, "extract_receipt", return_value=parsed_receipt()),
+            patch.object(api.config, "RECEIPT_OCR_COMPACT_FOR_MODEL", False),
+            patch.object(
+                api,
+                "extract_receipt_with_llama",
+                return_value=semantic_receipt(),
+            ) as semantic,
+        ):
+            response = await api.extract_receipt_endpoint(
+                make_upload(),
+                "2026-08-26",
+            )
+
+        semantic.assert_called_once()
+        model_text, reference_date, parsed_input = semantic.call_args.args
+        self.assertEqual(model_text, parsed_receipt()["ocr_text"])
+        self.assertEqual(reference_date, api.date(2026, 8, 26))
+        self.assertEqual(parsed_input["ocr_model_text"], parsed_receipt()["ocr_text"])
+        self.assertEqual(response["ocr_model_text"], parsed_receipt()["ocr_text"])
 
     async def test_llama_result_is_primary_and_rule_difference_requires_confirmation(self):
         with (

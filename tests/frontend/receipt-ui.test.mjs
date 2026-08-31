@@ -11,9 +11,21 @@ test("UI Scan Nota menyediakan kamera, preview, status, dan konfirmasi eksplisit
   assert.match(html, /id="receipt-preview-image"/);
   assert.match(html, /id="receipt-confirm-form"/);
   assert.match(html, /id="receipt-confirm-date"[^>]*required/);
-  assert.match(html, /id="receipt-confirm-total"[^>]*required/);
+  assert.match(html, /id="receipt-confirm-calculated-total"/);
+  assert.match(html, /id="receipt-add-item-button"/);
+  assert.doesNotMatch(html, /id="receipt-confirm-number"|id="receipt-total-candidates"/);
   assert.match(html, /Foto ulang/);
   assert.match(html, /Simpan transaksi/);
+});
+
+test("barang nota dapat diedit sebelum submit dan tanggal menggunakan hari ini", () => {
+  assert.match(app, /function createReceiptEditorField[\s\S]*dataset\.receiptField/);
+  assert.match(app, /function appendReceiptItemEditor/);
+  assert.match(app, /function collectReceiptEditorItems/);
+  assert.match(app, /receiptAddItemButton\.addEventListener/);
+  assert.match(app, /receiptConfirmDate\.value = getLocalReferenceDate\(\)/);
+  assert.match(app, /items: collectReceiptEditorItems\(\)/);
+  assert.match(app, /showActionPopup\("Transaksi nota berhasil disimpan\."\)/);
 });
 
 test("hasil server hanya disimpan di handler konfirmasi", () => {

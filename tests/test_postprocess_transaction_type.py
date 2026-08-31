@@ -314,6 +314,31 @@ class PostprocessTransactionTypeTests(unittest.TestCase):
 
         self.assertEqual(result["data"]["date"], "2026-08-23")
 
+    def test_undated_transaction_uses_reference_date_not_model_date(self):
+        raw_output = json.dumps(
+            {
+                "item_name": "Daging ayam giling",
+                "quantity": 2,
+                "unit": "kg",
+                "total_price": 50000,
+                "date": "2024-01-01",
+            }
+        )
+
+        result = parse_and_validate(
+            raw_output,
+            user_input="beli daging ayam giling 2kg 50rb buat bakso",
+            reference_date=date(2026, 8, 29),
+            transaction_type="expense",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["item_name"], "Daging ayam giling")
+        self.assertEqual(result["data"]["quantity"], 2)
+        self.assertEqual(result["data"]["unit"], "kg")
+        self.assertEqual(result["data"]["total_price"], 50000)
+        self.assertEqual(result["data"]["date"], "2026-08-29")
+
 
 if __name__ == "__main__":
     unittest.main()

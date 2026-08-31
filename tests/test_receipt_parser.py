@@ -2,6 +2,7 @@ import unittest
 
 from src.receipt_parser import (
     clean_receipt_ocr_text,
+    compact_receipt_ocr_text,
     extract_rupiah_values,
     parse_receipt,
     parse_receipt_date,
@@ -15,6 +16,86 @@ def line(text, confidence=0.95):
 
 
 class ReceiptParserTests(unittest.TestCase):
+    def test_compacts_ocr_for_model_without_dropping_transaction_fields(self):
+        full_text = (
+            "ALFAMART STA.KARET\n"
+            "PT.SUMBER ALFARIA TRIJAYA,TBK\n"
+            "JL.MH.THAMRIN NO.9,CIKOKOL,TANGERANG\n"
+            "NPWP 01.336.238.9.054.000\n"
+            "Bon KC79-805-1905DMK8 Kasir: SINTA\n"
+            "SARI ROTI SW CK 1 4,500 4,500\n"
+            "TOTAL Item 1 4,500\n"
+            "Tunai 5,000\n"
+            "Kembalian 500\n"
+            "Tgl. 19-05-2017 06:51:42\n"
+            "Kritik&Saran: 1500959"
+        )
+        receipt = parse_receipt(full_text.splitlines())["receipt"]
+
+        compacted = compact_receipt_ocr_text(full_text, receipt)
+
+        self.assertIn("ALFAMART STA.KARET", compacted)
+        self.assertRegex(compacted, r"Bon KC79[.-]805-1905DMK8")
+        self.assertIn("SARI ROTI SW CK 1 4,500 4,500", compacted)
+        self.assertIn("TOTAL Item 1 4,500", compacted)
+        self.assertIn("Tgl. 19-05-2017", compacted)
+        self.assertNotIn("JL.MH.THAMRIN", compacted)
+        self.assertNotIn("NPWP", compacted)
+        self.assertNotIn("Kritik&Saran", compacted)
+
+    def test_compaction_falls_back_when_transaction_structure_is_unclear(self):
+        text = "TOKO TANPA STRUKTUR\nAlamat panjang\nCatatan yang belum jelas"
+        self.assertEqual(compact_receipt_ocr_text(text), text)
+
+    def test_parses_collapsed_alfamart_receipt(self):
+        raw = (
+            "Aifamart ALFAMART RANCAGONG / 081294656153 RANCAGONG (RCGN] "
+            "ALFA TOWER LT.12, ALAM SUTERA,TANGERANG JL.KP. RANCAGONG "
+            "RT.02 RW.10 LEGOK NPWP : 01.336.238.9.054.000 "
+            "8on TC36.118-03079WK4 Kasir : ANNISA "
+            "RDL PAPAYA135G 1 37,900 37,900 "
+            "SEDAAP LAKSA86G 1 5.500 5,500 "
+            "POCKY CHO 47G 1 9,500 9,500 "
+            "Disc. -2,000 TOTAL Item 3 52,900 TOTAL Disc. 2,000 "
+            "Totai Belanja 50,900 Gopay QRIS 50,900 Kembalian 0 "
+            "PPN DPP: 47,657 PPN: 5,242"
+        )
+
+        result = parse_receipt([raw])
+        receipt = result["receipt"]
+
+        self.assertEqual(receipt["merchant_name"], "ALFAMART RANCAGONG")
+        self.assertEqual(receipt["subtotal"], 52900)
+        self.assertEqual(receipt["discount"], 2000)
+        self.assertEqual(receipt["tax"], 5242)
+        self.assertEqual(receipt["total"], 50900)
+        self.assertEqual(
+            [item["item_name"] for item in receipt["items"]],
+            ["RDL PAPAYA135G", "SEDAAP LAKSA86G", "POCKY CHO 47G"],
+        )
+        self.assertEqual(
+            [item["line_total"] for item in receipt["items"]],
+            [37900, 5500, 9500],
+        )
+        self.assertNotIn("Total akhir perlu diperiksa kembali.", receipt["warnings"])
+
+    def test_parses_retail_item_name_and_amounts_on_separate_lines(self):
+        result = parse_receipt([
+            line("ALFAMART RANCAGONG"),
+            line("RDL PAPAYA135G"),
+            line("1 37,900 37,900"),
+            line("SEDAAP LAKSA86G"),
+            line("1 5.500 5,500"),
+            line("TOTAL BELANJA 43,400"),
+        ])
+
+        items = result["receipt"]["items"]
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["quantity"], 1)
+        self.assertEqual(items[0]["unit_price"], 37900)
+        self.assertEqual(items[1]["line_total"], 5500)
+        self.assertEqual(result["receipt"]["total"], 43400)
+
     def test_cleans_collapsed_table_and_common_currency_ocr_errors(self):
         raw = (
             "Tuan Toko NOTA NO. BANYAK- NYA NAMABARANG HARGA JUMLAH "

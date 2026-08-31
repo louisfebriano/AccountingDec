@@ -13,7 +13,7 @@ from .price_utils import has_explicit_price_format
 
 # Kata kerja/konteks umum yang muncul di kalimat transaksi UMKM.
 TRANSACTION_KEYWORDS = [
-    "beli", "belanja", "restock", "restok", "stock", "stok",
+    "beli", "belanja", "restock", "restok", "ristok", "stock", "stok",
     "jual", "terjual", "laku",
     "bayar", "membayar",
     "dapat", "terima", "masuk",

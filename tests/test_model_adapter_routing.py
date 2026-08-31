@@ -1,5 +1,6 @@
 import time
 import unittest
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
@@ -19,6 +20,10 @@ class FakeInputs(dict):
 
 
 class FakeTokenizer:
+    def apply_chat_template(self, messages, **options):
+        assert options == {"tokenize": False, "add_generation_prompt": True}
+        return messages[-1]["content"]
+
     def __call__(self, _prompt, return_tensors):
         assert return_tensors == "pt"
         return FakeInputs()
@@ -45,6 +50,15 @@ class AdapterAwareModel:
             raise AssertionError("Adapter inference harus tetap frozen")
         self.active_adapter = adapter_name
 
+    @contextmanager
+    def disable_adapter(self):
+        previous = self.active_adapter
+        self.active_adapter = None
+        try:
+            yield
+        finally:
+            self.active_adapter = previous
+
     def generate(self, **_kwargs):
         before = self.active_adapter
         time.sleep(0.01)
@@ -54,6 +68,20 @@ class AdapterAwareModel:
 
 
 class ModelAdapterRoutingTests(unittest.TestCase):
+    def test_base_generation_temporarily_disables_soft_prompt(self):
+        model = AdapterAwareModel()
+        tokenizer = FakeTokenizer()
+
+        with patch.object(inference, "get_pipeline", return_value=(tokenizer, model)):
+            output = inference.generate_with_base_model(
+                [{"role": "user", "content": "koreksi transkrip"}],
+                max_new_tokens=32,
+            )
+
+        self.assertEqual(output, "{}")
+        self.assertEqual(model.generate_records, [(None, None)])
+        self.assertEqual(model.active_adapter, inference.TRANSACTION_ADAPTER_NAME)
+
     def test_requests_share_one_model_and_never_swap_active_adapter(self):
         model = AdapterAwareModel()
         tokenizer = FakeTokenizer()

@@ -8,14 +8,16 @@ const indexSource = await readFile(new URL("../../pwa/index.html", import.meta.u
 
 test("service worker tidak mengintersep POST, endpoint API, atau audio", () => {
   assert.match(source, /request\.method !== "GET"/);
-  assert.match(source, /url\.pathname === "\/extract"/);
-  assert.match(source, /url\.pathname === "\/extract\/audio"/);
+  assert.match(source, /url\.pathname\.startsWith\("\/extract"\)/);
+  assert.match(source, /url\.pathname\.startsWith\("\/auth"\)/);
+  assert.match(source, /url\.pathname\.startsWith\("\/transactions"\)/);
+  assert.match(source, /url\.pathname\.startsWith\("\/health"\)/);
   assert.match(source, /request\.destination === "audio"/);
 });
 
 test("service worker menggunakan cache berversi dan membersihkan cache lama", () => {
-  assert.match(source, /catatkas-shell-v17/);
-  assert.match(source, /"\/styles\.css\?v=16"/);
+  assert.match(source, /catatkas-shell-v21/);
+  assert.match(source, /"\/styles\.css\?v=19"/);
   assert.match(source, /"\/filters\.js\?v=16"/);
   assert.match(source, /"\/chart\.js\?v=16"/);
   assert.match(source, /"\/theme\.js\?v=16"/);
@@ -23,8 +25,16 @@ test("service worker menggunakan cache berversi dan membersihkan cache lama", ()
   assert.match(source, /request\.mode === "navigate"/);
   assert.match(source, /fetch\(request\)[\s\S]*\.catch\(\(\) => caches\.match\(request\)\)/);
   assert.match(appSource, /updateViaCache:\s*"none"/);
-  assert.match(indexSource, /\/styles\.css\?v=16/);
-  assert.match(indexSource, /\/app\.js\?v=17/);
+  assert.match(indexSource, /\/styles\.css\?v=19/);
+  assert.match(indexSource, /\/app\.js\?v=21/);
+});
+
+test("edit dan hapus menampilkan popup hasil aksi", () => {
+  assert.match(indexSource, /id="action-popup"/);
+  assert.match(indexSource, /aria-live="polite"/);
+  assert.match(appSource, /Perubahan transaksi berhasil disimpan\./);
+  assert.match(appSource, /Transaksi berhasil dihapus\./);
+  assert.match(appSource, /Transaksi nota berhasil disimpan\./);
 });
 
 test("ikon mikrofon adalah tombol yang memakai alur recorder utama", () => {

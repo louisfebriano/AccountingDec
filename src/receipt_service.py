@@ -10,7 +10,12 @@ from threading import Lock
 from typing import Any, Iterable, Sequence
 
 from . import config
-from .receipt_parser import clean_receipt_ocr_text, extract_rupiah_values, parse_receipt
+from .receipt_parser import (
+    clean_receipt_ocr_text,
+    compact_receipt_ocr_text,
+    extract_rupiah_values,
+    parse_receipt,
+)
 
 
 class InvalidReceiptImageError(ValueError):
@@ -294,6 +299,10 @@ def extract_receipt(path: Path) -> dict[str, Any]:
         parsed = parse_receipt(
             lines,
             minimum_confidence=config.RECEIPT_MIN_CONFIDENCE,
+        )
+        parsed["ocr_model_text"] = compact_receipt_ocr_text(
+            parsed.get("ocr_text") or "",
+            parsed.get("receipt"),
         )
         parsed["ocr_diagnostics"] = {
             "passes": len(candidates),

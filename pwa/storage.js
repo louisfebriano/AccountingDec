@@ -1,10 +1,22 @@
 export const HISTORY_KEY = "catatkas.transactions.v1";
 const LEGACY_HISTORY_KEY = "accountingdec.transactions.v1";
+const USER_HISTORY_PREFIX = "catatkas.transactions.v2";
+let activeHistoryKey = HISTORY_KEY;
+let activeUserId = null;
 export const MAX_HISTORY_ITEMS = 50;
 export const MAX_TEXT_LENGTH = 500;
 export const MAX_RECEIPT_ITEMS = 50;
 
 const TRANSACTION_TYPES = new Set(["income", "expense"]);
+
+export function setHistoryUser(userId) {
+  const normalized = String(userId || "").trim();
+  activeUserId = normalized || null;
+  activeHistoryKey = activeUserId
+    ? `${USER_HISTORY_PREFIX}.${activeUserId}`
+    : HISTORY_KEY;
+  return activeHistoryKey;
+}
 
 function nullableText(value) {
   const text = String(value ?? "").trim().slice(0, MAX_TEXT_LENGTH);
@@ -33,14 +45,12 @@ function normalizeReceiptItem(value) {
   const quantity = nullableNonNegativeNumber(value.quantity);
   const unitPrice = nullableNonNegativeNumber(value.unit_price);
   const lineTotal = nullableNonNegativeNumber(value.line_total);
-  const confidence = nullableNonNegativeNumber(value.confidence);
   return {
     item_name: itemName,
     quantity: quantity && quantity > 0 ? quantity : null,
     unit: nullableText(value.unit),
     unit_price: unitPrice,
     line_total: lineTotal,
-    confidence: confidence === null ? null : Math.min(confidence, 1),
   };
 }
 
@@ -52,13 +62,41 @@ function normalizeReceipt(value, confirmedTotal = null) {
   const detectedTotal = nullableNonNegativeNumber(value.total);
   return {
     merchant_name: nullableText(value.merchant_name),
-    receipt_number: nullableText(value.receipt_number),
-    subtotal: nullableNonNegativeNumber(value.subtotal),
-    discount: nullableNonNegativeNumber(value.discount),
-    tax: nullableNonNegativeNumber(value.tax),
-    service_charge: nullableNonNegativeNumber(value.service_charge),
     total: nullableNonNegativeNumber(confirmedTotal) ?? detectedTotal,
     items,
+  };
+}
+
+function localDateValue(now) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function confirmedReceiptItem(value, index) {
+  if (!value || typeof value !== "object") {
+    throw new Error(`Barang ke-${index + 1} tidak valid.`);
+  }
+  const itemName = nullableText(value.item_name);
+  if (!itemName) throw new Error(`Nama barang ke-${index + 1} wajib diisi.`);
+  const quantity = nullablePositiveNumber(value.quantity, `Quantity barang ke-${index + 1}`);
+  const unitPrice = value.unit_price === null || value.unit_price === undefined || value.unit_price === ""
+    ? null
+    : Number(value.unit_price);
+  if (unitPrice !== null && (!Number.isFinite(unitPrice) || unitPrice < 0)) {
+    throw new Error(`Harga satuan barang ke-${index + 1} tidak valid.`);
+  }
+  const lineTotal = nullablePositiveNumber(
+    value.line_total,
+    `Total harga barang ke-${index + 1}`,
+  );
+  return {
+    item_name: itemName,
+    quantity,
+    unit: nullableText(value.unit),
+    unit_price: unitPrice === null ? null : Math.round(unitPrice),
+    line_total: Math.round(lineTotal),
   };
 }
 
@@ -87,11 +125,14 @@ function normalizeStoredRecord(value, index, now) {
   const legacyInput = nullableText(value.original_text);
   return {
     id: nullableText(value.id) || newRecordId(new Date(now.getTime() + index)),
+    user_id: nullableText(value.user_id) || activeUserId,
     source,
     original_text: source === "text" ? legacyInput : null,
     transcript: source === "voice" ? nullableText(value.transcript) || legacyInput : null,
     normalized_text: source === "voice" ? nullableText(value.normalized_text) : null,
     note: nullableText(value.note) || (source === "manual" ? legacyInput : null),
+    reference_date: validDate(value.reference_date) ? value.reference_date : null,
+    extraction_method: nullableText(value.extraction_method),
     receipt: source === "receipt" ? normalizeReceipt(value.receipt, value.total_price) : null,
     item_name: nullableText(value.item_name),
     quantity: value.quantity === null || value.quantity === undefined || value.quantity === ""
@@ -110,8 +151,10 @@ function normalizeStoredRecord(value, index, now) {
 
 export function loadHistory(storage = localStorage, options = {}) {
   try {
-    const currentValue = storage.getItem(HISTORY_KEY);
-    const legacyValue = currentValue === null ? storage.getItem(LEGACY_HISTORY_KEY) : null;
+    const currentValue = storage.getItem(activeHistoryKey);
+    const legacyValue = activeHistoryKey === HISTORY_KEY && currentValue === null
+      ? storage.getItem(LEGACY_HISTORY_KEY)
+      : null;
     const serialized = currentValue || legacyValue || "[]";
     const parsed = JSON.parse(serialized);
     if (!Array.isArray(parsed)) return [];
@@ -123,7 +166,7 @@ export function loadHistory(storage = localStorage, options = {}) {
       .map((record, index) => normalizeStoredRecord(record, index, now));
     const migrated = JSON.stringify(history);
     if (legacyValue !== null || migrated !== serialized) {
-      storage.setItem(HISTORY_KEY, migrated);
+      storage.setItem(activeHistoryKey, migrated);
       storage.removeItem(LEGACY_HISTORY_KEY);
     }
     return history;
@@ -138,13 +181,13 @@ export function saveHistory(history, storage = localStorage) {
     .filter(isTransactionData)
     .slice(0, MAX_HISTORY_ITEMS)
     .map((record, index) => normalizeStoredRecord(record, index, now));
-  storage.setItem(HISTORY_KEY, JSON.stringify(safeHistory));
+  storage.setItem(activeHistoryKey, JSON.stringify(safeHistory));
   return safeHistory;
 }
 
 export function clearHistory(storage = localStorage) {
-  storage.removeItem(HISTORY_KEY);
-  storage.removeItem(LEGACY_HISTORY_KEY);
+  storage.removeItem(activeHistoryKey);
+  if (activeHistoryKey === HISTORY_KEY) storage.removeItem(LEGACY_HISTORY_KEY);
 }
 
 export function validateEditableTransaction(input) {
@@ -170,10 +213,13 @@ export function createManualTransaction(input, options = {}) {
   const fields = validateEditableTransaction(input);
   const record = {
     id: options.idFactory?.() || newRecordId(now),
+    user_id: activeUserId,
     source: "manual",
     original_text: null,
     transcript: null,
     normalized_text: null,
+    reference_date: null,
+    extraction_method: null,
     receipt: null,
     ...fields,
     created_at: now.toISOString(),
@@ -221,10 +267,13 @@ export function recordSuccessfulResponse(response, source, originalText, options
   const isVoice = source === "voice";
   const record = {
     id: options.idFactory?.() || newRecordId(now),
+    user_id: activeUserId,
     source: isVoice ? "voice" : "text",
     original_text: isVoice ? null : nullableText(response.input || originalText),
     transcript: isVoice ? nullableText(response.transcript || originalText) : null,
     normalized_text: isVoice ? nullableText(response.normalized_text) : null,
+    reference_date: null,
+    extraction_method: nullableText(response.extraction_method) || "llama_soft_prompt_transaction",
     note: null,
     receipt: null,
     item_name: nullableText(data.item_name),
@@ -255,24 +304,36 @@ export function createReceiptTransaction(response, confirmation, options = {}) {
 
   const storage = options.storage || localStorage;
   const now = options.now || new Date();
+  const submittedItems = Array.isArray(confirmation.items) ? confirmation.items : [];
+  if (submittedItems.length === 0) {
+    throw new Error("Tambahkan minimal satu barang dari nota sebelum menyimpan.");
+  }
+  const items = submittedItems.slice(0, MAX_RECEIPT_ITEMS).map(confirmedReceiptItem);
+  const totalPrice = items.reduce((sum, item) => sum + item.line_total, 0);
   const fields = validateEditableTransaction({
     transaction_type: "expense",
-    date: confirmation.date,
-    total_price: confirmation.total_price,
-    item_name: response.data.item_name,
-    quantity: response.data.quantity,
-    unit: response.data.unit,
+    date: confirmation.date || localDateValue(now),
+    total_price: totalPrice,
+    item_name: items.length === 1 ? items[0].item_name : null,
+    quantity: items.length === 1 ? items[0].quantity : null,
+    unit: items.length === 1 ? items[0].unit : null,
     note: null,
   });
-  const receipt = normalizeReceipt(response.data.receipt, fields.total_price);
-  if (!receipt) throw new Error("Rincian nota tidak valid.");
+  const receipt = {
+    merchant_name: nullableText(response.data.receipt.merchant_name),
+    total: fields.total_price,
+    items,
+  };
 
   const record = {
     id: options.idFactory?.() || newRecordId(now),
+    user_id: activeUserId,
     source: "receipt",
     original_text: null,
     transcript: null,
     normalized_text: null,
+    reference_date: null,
+    extraction_method: nullableText(response.extraction_method),
     note: null,
     receipt,
     ...fields,

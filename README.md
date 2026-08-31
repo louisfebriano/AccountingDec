@@ -13,7 +13,8 @@ Arsitektur produksi:
 
 ```text
 Teks  → Llama + Soft Prompt Transaksi ┐
-Voice → faster-whisper → Llama + Soft Prompt Transaksi ├→ validasi → konfirmasi/hasil → penyimpanan
+Voice → faster-whisper → Llama base (koreksi typo) → normalisasi bilangan
+      → Llama + Soft Prompt Transaksi ├→ validasi → konfirmasi/hasil → penyimpanan
 Foto  → PaddleOCR → Llama + Soft Prompt Nota ┘
 ```
 
@@ -65,6 +66,8 @@ WHISPER_COMPUTE_TYPE=int8
 WHISPER_LANGUAGE=id
 WHISPER_VAD_FILTER=true
 AUDIO_MAX_SIZE_MB=10
+VOICE_LLM_NORMALIZATION_ENABLED=true
+VOICE_LLM_NORMALIZATION_MAX_NEW_TOKENS=96
 RECEIPT_MAX_SIZE_MB=10
 RECEIPT_OCR_LANGUAGE=id
 RECEIPT_MIN_CONFIDENCE=0.50
@@ -72,6 +75,7 @@ RECEIPT_MAX_IMAGE_DIMENSION=2400
 RECEIPT_OCR_TARGET_LONG_EDGE=2000
 RECEIPT_MAX_IMAGE_PIXELS=25000000
 RECEIPT_OCR_MULTIPASS=true
+RECEIPT_OCR_COMPACT_FOR_MODEL=true
 RECEIPT_OCR_DET_BOX_THRESHOLD=0.30
 RECEIPT_OCR_DROP_SCORE=0.25
 RECEIPT_ADAPTER_OUTPUT_DIR=adapters/soft-prompt-nota
@@ -190,6 +194,7 @@ skripsi/
 ├── src/
 │   ├── api.py              # endpoint FastAPI
 │   ├── audio_service.py    # lazy loading dan transkripsi Whisper
+│   ├── voice_normalization.py # koreksi typo transkrip dengan base Llama
 │   ├── receipt_service.py  # praproses gambar dan lazy loading PaddleOCR
 │   ├── receipt_parser.py   # ekstraksi tanggal, total, serta rincian nota
 │   ├── receipt_schema.py   # schema JSON ketat Soft Prompt Nota
@@ -199,6 +204,11 @@ skripsi/
 │   ├── evaluate_receipt.py # metrik evaluasi khusus nota
 │   ├── number_utils.py     # normalisasi bilangan lisan Indonesia
 │   ├── transaction_type.py # klasifikasi income/expense/unknown
+│   ├── database.py         # koneksi PostgreSQL Supabase lazy dan connection pool
+│   ├── auth_service.py     # Supabase Auth dan validasi session server-side
+│   ├── audit_service.py    # satu audit log generik dengan metadata JSONB
+│   ├── transaction_schema.py # kontrak CRUD transaksi/nota
+│   ├── transaction_repository.py # query atomik transaksi dan rincian nota
 │   ├── inference.py        # pipeline inferensi Llama
 │   ├── evaluate.py         # evaluasi empat konfigurasi secara terkontrol
 │   ├── postprocess.py      # parsing dan validasi JSON
@@ -207,8 +217,8 @@ skripsi/
 │   ├── index.html          # shell aplikasi satu halaman
 │   ├── styles.css          # desain responsif dan aksesibel
 │   ├── app.js              # state UI, instalasi, dan integrasi form
-│   ├── api.js              # client endpoint teks, suara, dan Scan Nota
-│   ├── storage.js          # CRUD dan riwayat lokal maksimal 50 transaksi
+│   ├── api.js              # client ekstraksi dan CRUD transaksi Supabase
+│   ├── storage.js          # validasi record serta cache/fallback lokal
 │   ├── filters.js          # filter tanggal lokal minggu/bulan/tahun/custom
 │   ├── chart.js            # agregasi dan grafik tren tujuh hari
 │   ├── theme.js            # tema putih/gelap dan preferensi perangkat
@@ -356,9 +366,10 @@ python -m src.train_receipt
 ```
 
 Preflight training menampilkan VRAM bebas dan berhenti dengan pesan yang jelas apabila
-proses lain menyisakan kurang dari batas minimum. Menurunkan `RECEIPT_MAX_SEQ_LENGTH`
-di bawah panjang contoh tidak akan memangkas target; training akan meminta data OCR
-diringkas atau batas dinaikkan.
+proses lain menyisakan kurang dari batas minimum. Formatter menggunakan ringkasan OCR
+yang sama dengan inference sebelum menghitung token. Menurunkan
+`RECEIPT_MAX_SEQ_LENGTH` di bawah panjang contoh tidak akan memangkas target; training
+akan meminta data OCR diringkas atau batas dinaikkan.
 
 Sebelum training penuh, verifikasi satu forward/backward step tanpa menghasilkan
 adapter atau checkpoint permanen:
@@ -506,14 +517,133 @@ kemampuan model atau Soft Prompt.
 
 ## Menjalankan API
 
+### Menghubungkan Supabase
+
+CatatKas memakai alur **PWA → FastAPI → PostgreSQL Supabase** dan **Supabase Auth**.
+Pengguna wajib login atau register sebelum aplikasi utama ditampilkan. FastAPI
+memvalidasi session, mengambil UUID dari Supabase Auth, lalu menetapkan `user_id`
+setiap transaksi di server. Nilai `user_id` dari request browser tidak dipercaya.
+
+Pada dashboard Supabase, buka **Connect**:
+
+1. Tab **Direct** menyediakan connection string PostgreSQL untuk `DATABASE_URL`.
+   Direct connection dapat diganti **Supavisor session mode** bila jaringan lokal
+   tidak mendukung IPv6.
+2. Tab **Framework** menyediakan Project URL dan Publishable Key. Salin keduanya ke
+   `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY`. Publishable Key bukan password
+   database, tetapi tetap hanya dipakai backend pada implementasi ini. Jika dashboard
+   menampilkan nama `NEXT_PUBLIC_SUPABASE_URL` dan
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, salin nilainya ke nama tanpa prefix
+   `NEXT_PUBLIC_`; kedua nama bawaan Next.js juga diterima sebagai fallback.
+3. Pastikan provider **Email** aktif pada **Authentication → Sign In / Providers**.
+
+Isi file `.env` lokal dan jangan commit file tersebut:
+
+```dotenv
+DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@HOST_POOLER:5432/postgres
+DATABASE_POOL_MODE=session
+DATABASE_POOL_SIZE=5
+DATABASE_MAX_OVERFLOW=5
+DATABASE_CONNECT_TIMEOUT_SECONDS=10
+DATABASE_TRANSACTIONS_TABLE=transactions
+DATABASE_RECEIPTS_TABLE=receipts
+DATABASE_RECEIPT_ITEMS_TABLE=receipt_items
+DATABASE_AUDIT_LOGS_TABLE=audit_logs
+
+SUPABASE_URL=https://PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
+AUDIT_LOG_ENABLED=true
+MODEL_WARMUP_ON_STARTUP=false
+```
+
+Untuk FastAPI yang berjalan terus-menerus, gunakan **direct connection** atau
+**Supavisor session mode**. Session mode lebih mudah dipakai pada jaringan tanpa IPv6.
+Jika connection string memakai transaction pooler port `6543`, ubah
+`DATABASE_POOL_MODE=transaction`; CatatKas otomatis memakai `NullPool` dan mematikan
+prepared statement pada driver. Karakter khusus pada password harus di-percent-encode.
+Gunakan `AUTH_COOKIE_SECURE=false` hanya untuk `http://localhost`. Untuk Quick Tunnel
+atau deployment HTTPS, gunakan `AUTH_COOKIE_SECURE=true`. Password database, access
+token, refresh token, dan `DATABASE_URL` tidak pernah dikirim ke JavaScript.
+
+Schema lengkap tersedia di [`sql/supabase_schema.sql`](sql/supabase_schema.sql).
+Untuk instalasi yang tabelnya sudah ada, jalankan
+[`sql/supabase_auth_audit_migration.sql`](sql/supabase_auth_audit_migration.sql)
+melalui **SQL Editor**. Migrasi menambahkan `transactions.user_id` dan satu tabel
+generik `audit_logs`. Data transaksi lama sengaja tidak otomatis diberikan kepada
+akun acak: setelah akun terdaftar, isi `user_id` data lama dengan UUID yang benar dari
+**Authentication → Users**, lalu ubah kolom menjadi `NOT NULL` memakai perintah yang
+telah disediakan dalam file migrasi.
+
+Jika memakai tabel profil `public.users`, migrasi
+[`sql/alter_users_name_to_text.sql`](sql/alter_users_name_to_text.sql) memastikan
+kolom `name` memakai tipe PostgreSQL `text`. Tabel profil ini berbeda dari tabel
+bawaan `auth.users` yang digunakan Supabase Auth.
+
+Jika tabel nota lama menghasilkan error foreign key `receipt_items_id_fkey`, jalankan
+[`sql/fix_receipt_relationships.sql`](sql/fix_receipt_relationships.sql). Migrasi
+tersebut memindahkan relasi ke `receipt_items.receipt_id → receipts.id`, mengaktifkan
+`ON DELETE CASCADE`, serta menyelaraskan tipe pecahan `quantity` dan `confidence`.
+Migrasi memeriksa orphan record lebih dahulu dan membatalkan proses bila relasi data
+lama belum valid.
+
+Aplikasi memvalidasi tabel saat koneksi pertama. Nama tabel dapat diubah melalui
+environment variable. Koneksi dibuat secara lazy dan di-cache, sehingga model
+Llama/Whisper tidak ikut dimuat oleh login atau CRUD. Warmup Llama pada startup
+dinonaktifkan secara default agar layar login dapat berjalan tanpa mengalokasikan GPU;
+model baru dimuat saat ekstraksi pertama.
+
+Setelah API berjalan, verifikasi tanpa membocorkan kredensial:
+
+```bash
+curl http://localhost:8000/health/database
+curl http://localhost:8000/health/auth
+```
+
+Kedua endpoint harus menunjukkan status siap. Status `503` berarti konfigurasi belum
+lengkap atau layanan tidak dapat dijangkau; status `500` dengan pesan schema berarti
+field tabel belum sesuai. Panduan koneksi resmi tersedia pada
+[Supabase: Connecting to Postgres](https://supabase.com/docs/guides/database/connecting-to-postgres)
+dan [Supabase: SQLAlchemy](https://supabase.com/docs/guides/troubleshooting/using-sqlalchemy-with-supabase-FUqebT).
+
+Endpoint autentikasi yang dipakai PWA adalah `POST /auth/register`,
+`POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, dan `POST /auth/logout`.
+Session disimpan sebagai cookie `HttpOnly` first-party dan diperbarui tanpa
+mengekspos token ke JavaScript. Endpoint persistence yang dipakai PWA:
+
+- `GET /transactions` dan `GET /transactions/{id}` untuk membaca data.
+- `POST /transactions` untuk menyimpan satu transaksi terkonfirmasi.
+- `PUT /transactions/{id}` untuk mengedit transaksi.
+- `DELETE /transactions/{id}` atau `DELETE /transactions` untuk menghapus data.
+- `POST /transactions/import` untuk impor eksplisit maksimal 50 record.
+
+Seluruh operasi transaksi dibatasi dengan `WHERE user_id = <user aktif>`. Akun lain
+tidak dapat membaca, memperbarui, atau menghapus transaksi yang bukan miliknya.
+
+Tabel `audit_logs` dipakai bersama oleh autentikasi, ekstraksi teks/suara/nota,
+CRUD transaksi, dan health check. Kolom `event_type`, `status`, `user_id`, path,
+status HTTP, waktu, serta `metadata jsonb` membuat formatnya fleksibel untuk semua
+fitur. Login gagal tetap tercatat tanpa `user_id`; login berhasil dan fitur setelah
+login memakai UUID pengguna. Respons gagal menyimpan pesan yang sudah disanitasi pada
+`metadata.error_message`, termasuk rate limit `429`. `metadata.input` menyimpan detail
+yang relevan menurut metode: teks asli dan reference date untuk input teks; transkrip,
+teks normalisasi, format, serta ukuran untuk suara; teks OCR, format, serta ukuran untuk
+nota; dan payload terstruktur untuk CRUD manual. Teks OCR dibatasi 20.000 karakter dan
+ditandai dengan `ocr_text_truncated` apabila dipotong. Password, token, binary audio,
+binary foto, temporary path, dan raw output model tidak pernah masuk audit log.
+Tabel lama `extraction_logs`, bila ada, tidak lagi ditulis oleh aplikasi dan sengaja
+tidak dihapus oleh migrasi agar histori lama tetap dapat dipulihkan.
+
 ```bash
 uvicorn src.api:app --reload --port 8000
 ```
 
 FastAPI menyajikan API dan PWA dari origin yang sama. Setelah server siap, buka
 [http://localhost:8000/](http://localhost:8000/) di browser desktop. Endpoint
-`/extract`, `/extract/audio`, `/extract/receipt`, dan `/health` tersedia dari origin
-yang sama. Kontrak endpoint teks dan suara tetap dipertahankan.
+`/extract`, `/extract/audio`, `/extract/receipt`, dan `/transactions` hanya dapat
+dipakai setelah login. Endpoint health tersedia dari origin yang sama. Kontrak data
+ekstraksi teks dan suara tetap dipertahankan.
 
 Frontend tidak memerlukan proses build atau framework JavaScript. Perubahan file di
 folder `pwa/` dapat dilihat dengan memuat ulang browser ketika Uvicorn dijalankan
@@ -542,21 +672,24 @@ Utama**. Tombol tidak ditampilkan ketika aplikasi sudah berjalan dalam mode
 standalone.
 
 Service worker hanya menyimpan application shell dan aset statis. Request API, respons
-`/extract`, `/extract/audio`, `/extract/receipt`, audio, dan foto nota tidak dimasukkan
-ke cache. Ketika offline, riwayat tetap dapat dibaca tetapi inferensi transaksi
-dinonaktifkan karena Llama, Whisper, dan PaddleOCR tetap berjalan pada backend.
+`/extract`, `/transactions`, `/health`, audio, dan foto nota tidak dimasukkan ke cache.
+Ketika offline, cache riwayat tetap dapat dibaca tetapi inferensi dan operasi Supabase
+dinonaktifkan karena backend harus dapat dijangkau.
 
-Riwayat berisi maksimal 50 transaksi dan hanya tersimpan di `localStorage` perangkat
-pengguna. Rekaman suara, foto nota, teks OCR mentah, temporary path, token, output
-mentah model, dan rahasia API tidak disimpan. Gunakan tombol **Hapus riwayat** untuk
-membersihkannya.
+Database adalah sumber utama. `localStorage` hanya menjadi cache tampilan maksimal
+50 transaksi dan memakai key berbeda untuk setiap UUID akun. Cache lama yang belum
+memiliki pemilik tidak diimpor otomatis karena tidak aman untuk menebak kepemilikannya.
+Jika database tidak tersedia, cache akun masih dapat dibaca tetapi tambah/edit/hapus
+dinonaktifkan agar UI tidak mengklaim transaksi sudah tersimpan. Rekaman suara, foto
+nota, teks OCR mentah, temporary path, token, output mentah model, dan rahasia
+database tidak disimpan di cache.
 
 ### Riwayat, transaksi manual, dan grafik
 
-Tombol **Tambah manual** membuka form transaksi lokal tanpa memanggil Llama atau
-Whisper. Jenis transaksi, tanggal, dan nominal wajib diisi. Nama barang, quantity,
-unit, dan catatan bersifat opsional; field yang kosong disimpan sebagai `null`.
-Transaksi manual tetap dapat ditambahkan ketika perangkat offline.
+Tombol **Tambah manual** membuka form tanpa memanggil Llama atau Whisper. Jenis
+transaksi, tanggal, dan nominal wajib diisi. Nama barang, quantity, unit, dan catatan
+bersifat opsional; field yang kosong disimpan sebagai `null`. Dalam mode Supabase,
+perangkat harus online untuk memastikan perubahan benar-benar tersimpan di server.
 
 Tekan salah satu item riwayat untuk membuka detailnya. Popup detail menampilkan data
 transaksi, sumber, waktu pencatatan, dan input asli. Tombol **Edit** memperbarui data
@@ -584,12 +717,18 @@ belum ada pilihan, aplikasi mengikuti preferensi warna perangkat saat pertama di
 Merah tetap digunakan sebagai warna semantik pengeluaran agar seri grafik mudah
 dibedakan.
 
-Untuk hasil input suara, PWA menyimpan `transcript` asli dan `normalized_text` sebagai
-dua field terpisah. Detail menampilkan keduanya tanpa mengganti transkrip asli. Input
-teks disimpan sebagai **Input asli**, sedangkan transaksi manual menyimpan
-**Catatan**. Panjang setiap teks dibatasi 500 karakter. File audio dan `raw_output`
-internal Llama tidak pernah dimasukkan ke `localStorage`. Riwayat versi lama otomatis
-dimigrasikan ketika pertama kali dibaca.
+Untuk hasil input suara, base **Llama 3.2 3B-Instruct** dipakai tanpa Soft Prompt untuk
+memperbaiki typo transkripsi sebelum normalisasi bilangan dan ekstraksi transaksi.
+Koreksi dijalankan secara deterministik, dibatasi 96 token, dan ditolak apabila angka
+berubah atau kalimat ditulis ulang terlalu jauh. Jika tahap ini gagal, endpoint memakai
+normalisasi rule-based sebagai fallback. PWA menyimpan `transcript` asli dan
+`normalized_text` sebagai dua field terpisah; metadata audit juga mencatat
+`llama_corrected_text` dan `normalization_method`. Detail tetap menampilkan transkrip
+asli tanpa menggantinya. Input teks disimpan sebagai **Input asli**, sedangkan
+transaksi manual menyimpan **Catatan**. Panjang setiap teks transaksi tersimpan
+dibatasi 500 karakter. File audio dan `raw_output` internal Llama tidak pernah dikirim
+ke database. Riwayat versi lama dinormalisasi ketika pertama kali dibaca, tetapi cache
+tanpa pemilik tidak diimpor otomatis setelah fitur akun diaktifkan.
 
 ### Scan Nota
 
@@ -604,24 +743,34 @@ bersifat sementara dan selalu dihapus.
 Normalisasi setelah OCR hanya memperbaiki pola yang dapat dipastikan, misalnya
 `Ro.1.500` menjadi `Rp 1.500`, `Rp.10-000` menjadi `Rp 10.000`, header tabel yang
 menempel, serta baris item yang melebur. Nama barang atau digit yang hilang tidak
-ditebak. Teks mentah tetap tersedia hanya untuk audit internal, sedangkan teks bersih
-ditampilkan untuk konfirmasi dan dikirim ke Llama. Teks OCR kemudian selalu dicoba pada Llama + Soft
-Prompt Nota ketika fitur aktif. Parser regex tidak lagi menjadi ekstraktor semantik
-utama; parser dipakai untuk kandidat total/tanggal/item, validasi silang, warning, dan
-fallback eksplisit. Nama file pengguna tidak dipakai sebagai path; file sementara
-selalu bernama acak dan dihapus pada jalur sukses maupun gagal.
+ditebak. Teks OCR bersih yang lengkap tetap ditampilkan untuk konfirmasi dan disimpan
+di audit, sedangkan `ocr_model_text` adalah versi ringkas yang dikirim ke Llama + Soft
+Prompt Nota. Ringkasan mempertahankan identitas toko, nomor dan tanggal nota, baris
+barang, quantity, harga, diskon, pajak, subtotal, total, pembayaran, dan kembalian;
+alamat, NPWP, nomor telepon, slogan, promosi, kebijakan pengembalian, serta ucapan
+terima kasih yang tidak relevan dibuang. Jika struktur item atau ringkasan keuangan
+belum cukup jelas, sistem otomatis memakai teks OCR lengkap agar informasi transaksi
+tidak hilang. Perilaku ini aktif secara default melalui
+`RECEIPT_OCR_COMPACT_FOR_MODEL=true`.
+
+Teks OCR kemudian selalu dicoba pada Llama + Soft Prompt Nota ketika fitur aktif.
+Parser regex tidak lagi menjadi ekstraktor semantik utama; parser dipakai untuk
+kandidat total/tanggal/item, validasi silang, warning, dan fallback eksplisit. Nama
+file pengguna tidak dipakai sebagai path; file sementara selalu bernama acak dan
+dihapus pada jalur sukses maupun gagal.
 
 Quantity dengan pemisah titik, misalnya `4.000 kg`, dibedakan dari quantity desimal
 dengan mencocokkan harga satuan dan total baris yang tercetak. Total baris hasil OCR
-tetap dipertahankan; bila `quantity x harga`, jumlah seluruh item, atau subtotal pada
-nota tidak konsisten, CatatKas menampilkan warning dan tidak mengoreksi angka secara
-diam-diam.
+tetap dipertahankan untuk membantu pengguna memeriksa hasil deteksi.
 
-Hasil OCR tidak langsung dicatat. Dialog konfirmasi menampilkan nama toko, nomor nota,
-kandidat total, warning, rincian item, dan teks OCR sementara. Pengguna wajib memeriksa
-atau mengisi **tanggal transaksi** dan **total akhir**, kemudian menekan **Simpan
-transaksi**. Tanggal pemindaian tidak digunakan diam-diam ketika tanggal nota gagal
-dibaca.
+Hasil OCR tidak langsung dicatat. Dialog konfirmasi menampilkan nama toko, editor
+rincian barang, dan teks OCR sementara. Setiap nama barang, quantity, unit, harga
+satuan, serta total harga barang dapat diperbaiki; barang juga dapat ditambah atau
+dihapus sebelum submit. Tanggal transaksi otomatis memakai tanggal lokal hari ini dan
+tetap dapat diedit. Total transaksi dihitung dari jumlah total harga barang. Nomor nota,
+subtotal, diskon, pajak, biaya layanan, dan kandidat total tidak ditampilkan maupun
+disimpan untuk transaksi nota baru. Setelah penyimpanan berhasil, PWA menampilkan popup
+konfirmasi yang sama dengan aksi edit/hapus.
 
 CatatKas memakai prinsip **satu nota = satu transaksi keuangan**. Banyak barang pada
 nota disimpan sebagai `receipt.items` di dalam satu transaksi induk berjenis `expense`.
@@ -712,11 +861,6 @@ Contoh respons Scan Nota:
     "transaction_type": "expense",
     "receipt": {
       "merchant_name": "Toko Makmur",
-      "receipt_number": "INV-001",
-      "subtotal": 170000,
-      "discount": 5000,
-      "tax": 10000,
-      "service_charge": 5000,
       "total": 180000,
       "items": [
         {
@@ -727,12 +871,11 @@ Contoh respons Scan Nota:
           "line_total": 30000
         }
       ],
-      "confidence": 0.91,
       "warnings": []
     }
   },
-  "ocr_text": "teks OCR hanya untuk konfirmasi sementara",
-  "total_candidates": [180000],
+  "ocr_text": "teks OCR lengkap untuk konfirmasi dan audit",
+  "ocr_model_text": "teks OCR ringkas berisi barang, harga, dan total untuk model",
   "extraction_method": "llama_soft_prompt_receipt",
   "validation": {
     "status": "valid",
@@ -747,7 +890,7 @@ Contoh respons Scan Nota:
 tidak ada teks yang dapat dibaca, dan `503` ketika adapter nota wajib tetapi tidak
 tersedia. Error internal memakai pesan generik tanpa stack trace. Foto asli dan raw
 output Llama tidak pernah dikembalikan. Teks OCR hanya dikirim ke dialog konfirmasi dan
-tidak dimasukkan ke `localStorage`.
+tidak dimasukkan ke database maupun cache lokal.
 
 ## Pengujian
 
@@ -775,9 +918,11 @@ npm run test:frontend
 
 Tes frontend menggunakan mock untuk `fetch`, `MediaRecorder`, media stream, dan Web
 Storage. Tidak diperlukan mikrofon fisik, model, koneksi internet, maupun instalasi
-package npm tambahan. Pengujian mencakup CRUD manual, migrasi riwayat lama,
-transkrip suara, Scan Nota dan konfirmasinya, privasi storage, filter periode, detail
-transaksi, serta agregasi grafik.
+package npm tambahan. Pengujian mencakup gerbang login/register, request session,
+cache terpisah per pengguna, CRUD manual, transkrip suara, Scan Nota dan
+konfirmasinya, privasi storage, filter periode, detail transaksi, serta agregasi
+grafik. Unit test backend memakai mock Supabase Auth/database untuk menguji cookie
+`HttpOnly`, proteksi endpoint, isolasi `user_id`, dan audit tanpa rahasia.
 
 ## Batasan tahap pertama
 
@@ -786,8 +931,11 @@ transaksi, serta agregasi grafik.
 - Satu foto nota hanya menghasilkan satu transaksi induk. Item nota bukan transaksi
   kas terpisah.
 - PWA tidak menjalankan ekstraksi secara offline; koneksi ke backend tetap diperlukan.
-- Riwayat belum memiliki sinkronisasi, autentikasi, database, atau cadangan cloud dan
-  hanya tersedia pada browser/perangkat tempat transaksi dicatat.
+- Autentikasi tahap ini memakai email/password Supabase. Belum tersedia social login,
+  reset password dari UI, MFA, role admin, atau dashboard audit di PWA; audit dapat
+  diperiksa melalui tabel `audit_logs` pada Supabase.
+- Cache lokal bukan antrean sinkronisasi offline. Perubahan CRUD Supabase memerlukan
+  koneksi backend; transaksi tidak diantrekan diam-diam ketika jaringan putus.
 - Tidak ada streaming audio, penyimpanan rekaman permanen, atau inferensi multimodal
   langsung.
 - Normalisasi bilangan mencakup bentuk baku satuan, puluhan, ratusan, ribuan, jutaan,
@@ -800,6 +948,9 @@ transaksi, serta agregasi grafik.
 - Modal, pinjaman, pengembalian dana, dan multi-transaksi belum diklasifikasikan
   otomatis apabila arah transaksinya tidak jelas.
 - Akurasi transkripsi tetap dipengaruhi kualitas rekaman, kebisingan, dan pelafalan.
+- Koreksi typo Llama bersifat best-effort dan menambah satu tahap generasi untuk input
+  suara. Angka dilindungi oleh validasi deterministik, tetapi pengguna tetap perlu
+  memeriksa hasil normalisasi sebelum menyimpan transaksi.
 - OCR versi awal berfokus pada nota **cetak** berbahasa Indonesia. Nota tulisan tangan,
   sangat pudar, terpotong, tertutup, buram, atau bertata letak kompleks dapat gagal
   dibaca dan harus difoto ulang atau dicatat manual.

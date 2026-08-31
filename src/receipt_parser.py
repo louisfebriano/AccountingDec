@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from statistics import mean
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 
 MAX_RECEIPT_ITEMS = 50
@@ -59,6 +59,11 @@ _TABULAR_PRICE_SUFFIX_PATTERN = re.compile(
 _STRICT_RUPIAH_PATTERN = re.compile(
     r"(?:\d{1,3}(?:[.,\s]\d{3})+|\d{3,})$"
 )
+_RETAIL_ITEM_AMOUNTS_PATTERN = re.compile(
+    r"(?<![\d.,])(?P<quantity>\d{1,3}(?:[.,]\d+)?)\s+"
+    r"(?P<unit_price>\d{1,3}(?:[.,]\d{3})+|\d{3,})\s+"
+    r"(?P<line_total>\d{1,3}(?:[.,]\d{3})+|\d{3,})(?![\d.,])"
+)
 _KNOWN_ITEM_UNITS = (
     "buah",
     "bungkus",
@@ -100,6 +105,30 @@ _OCR_CURRENCY_PREFIX = re.compile(
 )
 _OCR_ROW_UNIT_PATTERN = "|".join(
     sorted((re.escape(unit) for unit in _KNOWN_ITEM_UNITS), key=len, reverse=True)
+)
+_COMPACT_KEEP_PATTERN = re.compile(
+    r"\b(?:no\.?\s*(?:struk|nota)|nomor|bon|invoice|receipt|ref|"
+    r"tgl|tanggal|date|purchase\s+date|nama\s*barang|rincian\s*barang|"
+    r"qty|harga|jumlah|sub\s*total|total|disc(?:ount)?|diskon|potongan|"
+    r"pajak|ppn|tax|service|bayar|tunai|cash|qris|gopay|kembali(?:an)?)\b",
+    re.IGNORECASE,
+)
+_COMPACT_NOISE_PATTERN = re.compile(
+    r"\b(?:alamat|jalan|jl\.?|rt\.?\s*\d|rw\.?\s*\d|kel(?:urahan)?\.?|"
+    r"kec(?:amatan)?\.?|npwp|telp|telepon|whatsapp|sms|kritik|saran|"
+    r"terima\s*kasih|atas\s*kunjungan|hormat\s*kami|"
+    r"barang\s+yang\s+sudah\s+dibeli|"
+    r"tidak\s+(?:dapat|bisa)\s+(?:ditukar|dikembalikan)|"
+    r"website|instagram|facebook)\b",
+    re.IGNORECASE,
+)
+_COMPACT_RECEIPT_CODE_PATTERN = re.compile(
+    r"\b[A-Z]{1,5}\d{1,4}[./-][A-Z0-9./-]{4,}\b",
+    re.IGNORECASE,
+)
+_COMPACT_DAMAGED_DATE_PATTERN = re.compile(
+    r"(?:^|\s)T?\d{1,2}[-/.]\d{1,2}[-/.]\d{2,6}",
+    re.IGNORECASE,
 )
 
 
@@ -270,6 +299,12 @@ def normalize_ocr_lines(lines: Iterable[Any]) -> list[ReceiptLine]:
 def clean_receipt_ocr_text(text: str) -> str:
     """Rapikan error OCR umum tanpa menebak karakter nama barang yang hilang."""
     cleaned = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = re.sub(
+        r"(?i)\baifamart\s+(?=alfamart\b)",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?i)\btota[i1]\b", "TOTAL", cleaned)
     cleaned = re.sub(r"(?<=\d)[sS](?=[.,]\d{3}\b)", "5", cleaned)
     cleaned = re.sub(
         r"\b6(?=[aeiou][A-Za-z]{2,}\b)",
@@ -303,6 +338,30 @@ def clean_receipt_ocr_text(text: str) -> str:
         cleaned,
         flags=re.IGNORECASE,
     )
+    # Struk minimarket dapat dikembalikan OCR sebagai satu paragraf. Pisahkan kasir,
+    # baris produk, dan ringkasan hanya saat pola nominalnya lengkap.
+    cleaned = re.sub(
+        r"(?i)(\bkasir\s*:\s*[A-Za-z0-9._-]+)\s+",
+        r"\1\n",
+        cleaned,
+    )
+    retail_amount = r"\d{1,3}(?:[.,]\d{3})+"
+    cleaned = re.sub(
+        rf"({retail_amount})\s+"
+        rf"(?=[A-Za-z][A-Za-z0-9+&./'-]*"
+        rf"(?:\s+[A-Za-z0-9+&./'-]+){{0,5}}\s+"
+        rf"\d{{1,3}}(?:[.,]\d+)?\s+{retail_amount}\s+{retail_amount})",
+        r"\1\n",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?<!^)(?<!\n)\s+"
+        r"(?=(?:(?<!total\s)disc\.?|total\s+(?:item|disc\.?|belanja)|gopay\b|"
+        r"kembali(?:an)?\b|ppn\s+dpp\b))",
+        "\n",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     return "\n".join(
         re.sub(r"[ \t]+", " ", line).strip()
         for line in cleaned.splitlines()
@@ -320,11 +379,119 @@ def clean_receipt_ocr_lines(lines: Sequence[ReceiptLine]) -> list[ReceiptLine]:
     return cleaned_lines
 
 
+def _looks_like_item_detail_line(text: str) -> bool:
+    """Kenali baris quantity/harga yang terpisah dari nama barang."""
+    if _RETAIL_ITEM_AMOUNTS_PATTERN.search(text) or _parse_quantity_pattern(text):
+        return True
+    if not extract_rupiah_values(text):
+        return False
+    return not re.search(r"[A-Za-z]", text) or bool(
+        re.search(
+            rf"\b(?:{_OCR_ROW_UNIT_PATTERN}|rp)\b",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
+def compact_receipt_ocr_text(
+    text: str,
+    receipt: Mapping[str, Any] | None = None,
+) -> str:
+    """Ringkas OCR untuk model tanpa menghapus field transaksi yang terdeteksi."""
+    cleaned = clean_receipt_ocr_text(text)
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    if len(lines) <= 3:
+        return cleaned
+
+    keep: set[int] = set()
+    receipt_data = dict(receipt or {})
+
+    # Dua baris teks awal biasanya nama merchant dan cabang/subjudul. Alamat,
+    # telepon, serta NPWP sesudahnya tidak perlu memenuhi context window model.
+    header_count = 0
+    for index, line in enumerate(lines[:6]):
+        if not re.search(r"[A-Za-z]", line):
+            continue
+        if _COMPACT_NOISE_PATTERN.search(line):
+            continue
+        keep.add(index)
+        header_count += 1
+        if header_count == 2:
+            break
+
+    summary_indices: set[int] = set()
+    for index, line in enumerate(lines):
+        if (
+            _COMPACT_KEEP_PATTERN.search(line)
+            or _COMPACT_RECEIPT_CODE_PATTERN.search(line)
+            or _COMPACT_DAMAGED_DATE_PATTERN.search(line)
+        ):
+            keep.add(index)
+            if re.search(
+                r"\b(?:sub\s*total|total|disc(?:ount)?|diskon|pajak|ppn|tax|"
+                r"service|bayar|tunai|cash|qris|gopay|kembali(?:an)?)\b",
+                line,
+                re.IGNORECASE,
+            ):
+                summary_indices.add(index)
+
+    receipt_lines = [ReceiptLine(line, 1.0) for line in lines]
+    table_bounds = _item_table_bounds(receipt_lines)
+    if table_bounds:
+        keep.update(range(table_bounds[0] - 1, table_bounds[1]))
+
+    item_names = [
+        str(item.get("item_name") or "").strip().casefold()
+        for item in receipt_data.get("items") or []
+        if str(item.get("item_name") or "").strip()
+    ]
+    for index, line in enumerate(lines):
+        normalized_line = re.sub(r"\s+", " ", line).casefold()
+        matches_item = any(
+            item_name in normalized_line
+            or (len(normalized_line) >= 4 and normalized_line in item_name)
+            for item_name in item_names
+        )
+        has_item_amounts = bool(
+            _looks_like_item_detail_line(line)
+            or (
+                re.search(r"[A-Za-z]", line)
+                and len(extract_rupiah_values(line)) >= 2
+            )
+        )
+        if not matches_item and not has_item_amounts:
+            continue
+        if _COMPACT_NOISE_PATTERN.search(line) and not matches_item:
+            continue
+        keep.add(index)
+        if index + 1 < len(lines) and _looks_like_item_detail_line(lines[index + 1]):
+            keep.add(index + 1)
+
+    # Tanpa item atau ringkasan keuangan yang cukup jelas, jangan mengambil risiko
+    # membuang teks yang mungkin dibutuhkan model.
+    if not item_names or not summary_indices:
+        return cleaned
+
+    compacted = "\n".join(line for index, line in enumerate(lines) if index in keep)
+    return compacted if compacted and len(compacted) < len(cleaned) else cleaned
+
+
 def _label_value(lines: Sequence[ReceiptLine], pattern: str) -> Optional[int]:
     matcher = re.compile(pattern, re.IGNORECASE)
     for index, line in enumerate(lines):
         if not matcher.search(line.text):
             continue
+        label_match = matcher.search(line.text)
+        remainder = line.text[label_match.end():] if label_match else line.text
+        signed_value = re.search(
+            r"[-–—]\s*(?:rp\.?\s*)?"
+            r"(\d{1,3}(?:[.,\s]\d{3})+|\d{3,})",
+            remainder,
+            re.IGNORECASE,
+        )
+        if signed_value:
+            return parse_rupiah(signed_value.group(1))
         values = extract_rupiah_values(line.text)
         if values:
             return values[-1]
@@ -338,13 +505,15 @@ def _label_value(lines: Sequence[ReceiptLine], pattern: str) -> Optional[int]:
 def _total_candidates(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
     positive_labels = (
         (r"\bgrand\s*total\b", 120),
+        (r"\btotal\s+belanja\b", 118),
         (r"\btotal\s+(?:bayar|pembayaran)\b", 115),
         (r"\bbayar\b", 110),
         (r"\bjumlah\b", 100),
         (r"(?<!sub)\btotal\b", 90),
     )
     excluded = re.compile(
-        r"\b(?:sub\s*total|kembali(?:an)?|change|tunai|cash|uang\s+diterima)\b",
+        r"\b(?:sub\s*total|total\s+(?:items?|disc(?:ount)?|diskon)|"
+        r"kembali(?:an)?|change|tunai|cash|uang\s+diterima)\b",
         re.IGNORECASE,
     )
     candidates: list[dict[str, Any]] = []
@@ -406,6 +575,15 @@ def _merchant_name(lines: Sequence[ReceiptLine]) -> Optional[str]:
         re.IGNORECASE,
     )
     for line in lines[:6]:
+        alfamart_branch = re.search(
+            r"\b(ALFAMART(?:\s+[A-Z0-9.-]+){0,3})\s*(?=/)",
+            line.text,
+            re.IGNORECASE,
+        )
+        if alfamart_branch:
+            return alfamart_branch.group(1).strip()[:200]
+        if re.search(r"\bALFAMART\b", line.text, re.IGNORECASE):
+            return "ALFAMART"
         if rejected.search(line.text) or not re.search(r"[A-Za-z]", line.text):
             continue
         if len(extract_rupiah_values(line.text)) > 0:
@@ -540,6 +718,60 @@ def _parse_tabular_item_line(
     }
 
 
+def _retail_item_from_match(
+    item_name: str,
+    match: re.Match[str],
+    confidence: float,
+) -> Optional[dict[str, Any]]:
+    """Bentuk item dari pola retail ``nama qty harga jumlah``."""
+    cleaned_name = item_name.strip(" -:|.")
+    if "kasir" in cleaned_name.lower():
+        cleaned_name = re.sub(
+            r"(?is)^.*\bkasir\s*:\s*[A-Za-z0-9._-]+\s*",
+            "",
+            cleaned_name,
+        ).strip(" -:|.")
+    if not cleaned_name or not _is_item_name(cleaned_name):
+        return None
+
+    unit_price = parse_rupiah(match.group("unit_price"))
+    line_total = parse_rupiah(match.group("line_total"))
+    if unit_price is None or line_total is None:
+        return None
+    quantity = parse_receipt_quantity(
+        match.group("quantity"),
+        unit_price=unit_price,
+        line_total=line_total,
+    )
+    if quantity is None:
+        return None
+    return {
+        "item_name": cleaned_name[:200],
+        "quantity": int(quantity) if quantity.is_integer() else quantity,
+        "unit": None,
+        "unit_price": unit_price,
+        "line_total": line_total,
+        "confidence": round(confidence, 4),
+    }
+
+
+def _parse_retail_item_line(line: ReceiptLine) -> list[dict[str, Any]]:
+    """Ambil satu atau beberapa item retail yang melebur dalam satu baris OCR."""
+    matches = list(_RETAIL_ITEM_AMOUNTS_PATTERN.finditer(line.text))
+    items: list[dict[str, Any]] = []
+    previous_end = 0
+    for match in matches:
+        item = _retail_item_from_match(
+            line.text[previous_end:match.start()],
+            match,
+            line.confidence,
+        )
+        previous_end = match.end()
+        if item is not None:
+            items.append(item)
+    return items
+
+
 def _extract_items(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     table_bounds = _item_table_bounds(lines)
@@ -549,6 +781,27 @@ def _extract_items(lines: Sequence[ReceiptLine]) -> list[dict[str, Any]]:
         quantity_info = _parse_quantity_pattern(line.text)
         item_name: Optional[str] = None
         confidence_values = [line.confidence]
+
+        retail_items = _parse_retail_item_line(line)
+        if retail_items:
+            items.extend(retail_items[: MAX_RECEIPT_ITEMS - len(items)])
+            index += 1
+            continue
+
+        if _is_item_name(line.text) and index + 1 < len(lines):
+            retail_amounts = _RETAIL_ITEM_AMOUNTS_PATTERN.fullmatch(
+                lines[index + 1].text.strip()
+            )
+            if retail_amounts:
+                retail_item = _retail_item_from_match(
+                    line.text,
+                    retail_amounts,
+                    mean((line.confidence, lines[index + 1].confidence)),
+                )
+                if retail_item is not None:
+                    items.append(retail_item)
+                    index += 2
+                    continue
 
         if not quantity_info:
             inside_table = bool(
@@ -635,8 +888,8 @@ def parse_receipt(
 
     candidates = _total_candidates(lines)
     total = candidates[0]["value"] if candidates else None
-    subtotal = _label_value(lines, r"\bsub\s*total\b")
-    discount = _label_value(lines, r"\b(?:diskon|discount|potongan)\b")
+    subtotal = _label_value(lines, r"\b(?:sub\s*total|total\s+items?)\b")
+    discount = _label_value(lines, r"\b(?:disc(?:ount)?|diskon|potongan)\b")
     tax = _label_value(lines, r"\b(?:pajak|tax|ppn)\b")
     service_charge = _label_value(lines, r"\b(?:service(?:\s+charge)?|layanan)\b")
     items = _extract_items(lines)
@@ -684,7 +937,20 @@ def parse_receipt(
         warnings.append("Jumlah rincian barang tidak sama dengan subtotal nota.")
 
     if subtotal is not None and total is not None:
-        expected_total = subtotal - (discount or 0) + (tax or 0) + (service_charge or 0)
+        tax_is_included = any(
+            re.search(
+                r"\bPPN\b.*\bDPP\b|\bDPP\b.*\bPPN\b",
+                line.text,
+                re.IGNORECASE,
+            )
+            for line in lines
+        )
+        expected_total = (
+            subtotal
+            - (discount or 0)
+            + (0 if tax_is_included else (tax or 0))
+            + (service_charge or 0)
+        )
         if amounts_differ(expected_total, total):
             warnings.append("Total akhir perlu diperiksa kembali.")
 

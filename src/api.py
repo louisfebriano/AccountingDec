@@ -5,19 +5,39 @@ uvicorn src.api:app --reload --port 8000
 import logging
 import re
 import tempfile
+import time
 import uuid
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, EmailStr, Field
+from starlette.background import BackgroundTask, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
 from . import config
 from .audio_service import transcribe_audio
-from .number_utils import normalize_indonesian_numbers
+from .audit_service import AuditSchemaError, get_audit_log_repository
+from .auth_service import (
+    AuthConfigurationError,
+    AuthServiceError,
+    AuthenticatedUser,
+    auth_is_configured,
+    get_user as get_supabase_user,
+    login as login_supabase_user,
+    logout as logout_supabase_user,
+    refresh as refresh_supabase_session,
+    register as register_supabase_user,
+)
+from .number_utils import normalize_voice_transaction_text
 from .receipt_service import (
     InvalidReceiptImageError,
     ReceiptOcrUnavailableError,
@@ -29,6 +49,19 @@ from .receipt_inference import (
     extract_receipt_with_llama,
 )
 from .receipt_validation import fallback_validation, validate_receipt_semantics
+from .database import (
+    DatabaseNotConfiguredError,
+    DatabaseUnavailableError,
+    database_is_configured,
+)
+from .transaction_repository import (
+    DatabaseSchemaError,
+    TransactionConflictError,
+    TransactionNotFoundError,
+    get_transaction_repository,
+)
+from .transaction_schema import TransactionCreate, TransactionImport, TransactionUpdate
+from .voice_normalization import correct_voice_transcript_with_llama
 
 # Pakai logger Uvicorn agar log INFO aplikasi tampil pada terminal API secara default.
 logger = logging.getLogger("uvicorn.error")
@@ -47,6 +80,7 @@ AUDIO_CONTENT_TYPE_SUFFIXES = {
     "application/ogg": ".ogg",
 }
 _REFERENCE_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_AUDIT_OCR_TEXT_LIMIT = 20_000
 RECEIPT_EXTENSION_FORMATS = {
     ".jpg": "JPEG",
     ".jpeg": "JPEG",
@@ -68,23 +102,217 @@ class ExtractRequest(BaseModel):
     reference_date: Optional[str] = None
 
 
+class AuthCredentials(BaseModel):
+    """Email dan password hanya digunakan selama request autentikasi."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+def _safe_audit_error_message(detail: object, status_code: int) -> str:
+    """Bentuk pesan audit ringkas tanpa menyalin body atau detail validasi."""
+    if isinstance(detail, str) and detail.strip():
+        return detail.strip()[:500]
+    if status_code == 422:
+        return "Request tidak valid."
+    return f"Request gagal dengan status HTTP {status_code}."
+
+
+def _merge_audit_metadata(request: Request | None, **values: object) -> None:
+    """Gabungkan metadata audit tanpa menghapus identitas dari dependency auth."""
+    if request is None:
+        return
+    metadata = dict(getattr(request.state, "audit_metadata", {}) or {})
+    metadata.update(values)
+    request.state.audit_metadata = metadata
+
+
+def _limited_audit_text(value: object, limit: int = _AUDIT_OCR_TEXT_LIMIT) -> tuple[str, bool]:
+    """Batasi teks audit besar dan tandai jika isinya dipotong."""
+    text = str(value or "")
+    return text[:limit], len(text) > limit
+
+
+@app.exception_handler(StarletteHTTPException)
+async def audited_http_exception_handler(
+    request: Request,
+    exc: StarletteHTTPException,
+):
+    """Simpan pesan HTTP yang aman agar dapat dipakai audit middleware."""
+    request.state.audit_error_message = _safe_audit_error_message(
+        exc.detail,
+        exc.status_code,
+    )
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def audited_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    """Audit kegagalan validasi tanpa menyalin nilai input pengguna."""
+    request.state.audit_error_message = "Request tidak valid."
+    return await request_validation_exception_handler(request, exc)
+
+
+def _auth_http_error(exc: Exception) -> HTTPException:
+    """Petakan kegagalan Supabase Auth ke pesan API yang aman."""
+    if isinstance(exc, AuthConfigurationError):
+        return HTTPException(
+            status_code=503,
+            detail="Supabase Auth belum dikonfigurasi pada server.",
+        )
+    if isinstance(exc, AuthServiceError):
+        return HTTPException(status_code=exc.status_code, detail=str(exc))
+    return HTTPException(
+        status_code=503,
+        detail="Layanan autentikasi tidak dapat dijangkau.",
+    )
+
+
+def _cookie_samesite() -> str:
+    return (
+        config.AUTH_COOKIE_SAMESITE
+        if config.AUTH_COOKIE_SAMESITE in {"lax", "strict", "none"}
+        else "lax"
+    )
+
+
+def _set_session_cookies(response: Response, session: dict) -> None:
+    """Simpan session Supabase pada cookie HttpOnly first-party."""
+    access_token = str(session.get("access_token") or "")
+    refresh_token = str(session.get("refresh_token") or "")
+    if not access_token or not refresh_token:
+        return
+    try:
+        access_max_age = max(int(session.get("expires_in") or 3600), 60)
+    except (TypeError, ValueError):
+        access_max_age = 3600
+    common = {
+        "httponly": True,
+        "secure": config.AUTH_COOKIE_SECURE,
+        "samesite": _cookie_samesite(),
+        "path": "/",
+    }
+    response.set_cookie(
+        config.AUTH_ACCESS_COOKIE_NAME,
+        access_token,
+        max_age=access_max_age,
+        **common,
+    )
+    response.set_cookie(
+        config.AUTH_REFRESH_COOKIE_NAME,
+        refresh_token,
+        max_age=max(config.AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS, 3600),
+        **common,
+    )
+
+
+def _clear_session_cookies(response: Response) -> None:
+    """Hapus kedua cookie session untuk logout lokal yang deterministik."""
+    common = {
+        "httponly": True,
+        "secure": config.AUTH_COOKIE_SECURE,
+        "samesite": _cookie_samesite(),
+        "path": "/",
+    }
+    response.delete_cookie(config.AUTH_ACCESS_COOKIE_NAME, **common)
+    response.delete_cookie(config.AUTH_REFRESH_COOKIE_NAME, **common)
+
+
+async def require_authenticated_user(request: Request) -> AuthenticatedUser:
+    """Validasi cookie access token dan pasang user_id untuk audit middleware."""
+    access_token = request.cookies.get(config.AUTH_ACCESS_COOKIE_NAME)
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Silakan login terlebih dahulu.")
+    try:
+        user = await get_supabase_user(access_token)
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        raise _auth_http_error(exc) from None
+    request.state.audit_user_id = user.id
+    request.state.audit_metadata = {"user_email": user.email}
+    return user
+
+
+def _should_audit(path: str) -> bool:
+    """Audit fitur backend tanpa membanjiri tabel dengan aset CSS/JS/icon."""
+    return path.startswith(("/auth", "/transactions", "/extract", "/health"))
+
+
+def _write_audit_log(**values) -> None:
+    """Tulis audit tanpa membuat fitur utama gagal jika log bermasalah."""
+    try:
+        get_audit_log_repository().record(**values)
+    except (AuditSchemaError, DatabaseNotConfiguredError, DatabaseUnavailableError):
+        logger.exception("Audit log CatatKas gagal disimpan")
+
+
+def _append_background_task(response: Response, task: BackgroundTask) -> None:
+    """Tambahkan tugas audit tanpa menimpa background task milik respons."""
+    if response.background is None:
+        response.background = task
+        return
+    response.background = BackgroundTasks([response.background, task])
+
+
+@app.middleware("http")
+async def audit_backend_request(request: Request, call_next):
+    """Catat hasil seluruh fitur backend ke satu tabel audit_logs."""
+    started_at = time.perf_counter()
+    response = await call_next(request)
+    if not (
+        config.AUDIT_LOG_ENABLED
+        and database_is_configured()
+        and _should_audit(request.url.path)
+    ):
+        return response
+
+    route = request.scope.get("route")
+    event_type = getattr(route, "name", None) or (
+        f"{request.method.lower()}:{request.url.path}"
+    )
+    metadata = dict(getattr(request.state, "audit_metadata", {}) or {})
+    metadata.update(
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        query_parameter_names=sorted(request.query_params.keys()),
+    )
+    if response.status_code >= 400:
+        metadata["error_message"] = getattr(
+            request.state,
+            "audit_error_message",
+            f"Request gagal dengan status HTTP {response.status_code}.",
+        )
+    _append_background_task(
+        response,
+        BackgroundTask(
+            _write_audit_log,
+            event_type=event_type,
+            status="success" if response.status_code < 400 else "failure",
+            user_id=getattr(request.state, "audit_user_id", None),
+            entity_type=getattr(request.state, "audit_entity_type", None),
+            entity_id=getattr(request.state, "audit_entity_id", None),
+            http_method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata=metadata,
+        ),
+    )
+    return response
+
+
 def _receipt_response_data(
     semantic_data: dict,
     rule_result: dict,
     validation: dict,
 ) -> dict:
-    """Pertahankan struktur receipt lama sambil memakai nilai utama dari Llama."""
-    rule_receipt = rule_result.get("receipt") or {}
+    """Bangun hasil nota minimum untuk diedit pengguna sebelum disimpan."""
     receipt = {
         "merchant_name": semantic_data.get("merchant_name"),
-        "receipt_number": semantic_data.get("receipt_number"),
-        "subtotal": semantic_data.get("subtotal"),
-        "discount": semantic_data.get("discount"),
-        "tax": semantic_data.get("tax"),
-        "service_charge": semantic_data.get("service_charge"),
         "total": semantic_data.get("total"),
         "items": semantic_data.get("items") or [],
-        "confidence": rule_receipt.get("confidence"),
         "warnings": validation["warnings"],
     }
     return {
@@ -100,8 +328,13 @@ def _receipt_response_data(
 
 def _fallback_receipt_response_data(rule_result: dict, validation: dict) -> dict:
     """Bangun respons kompatibel dengan penanda fallback yang tidak ambigu."""
-    receipt = dict(rule_result["receipt"])
-    receipt["warnings"] = validation["warnings"]
+    parsed_receipt = rule_result["receipt"]
+    receipt = {
+        "merchant_name": parsed_receipt.get("merchant_name"),
+        "total": parsed_receipt.get("total"),
+        "items": parsed_receipt.get("items") or [],
+        "warnings": validation["warnings"],
+    }
     return {
         "item_name": None,
         "quantity": None,
@@ -121,6 +354,30 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
         user_input,
         adapter_path=adapter_path,
         reference_date=reference_date,
+    )
+
+
+def _database_http_error(exc: Exception) -> HTTPException:
+    """Petakan error database ke respons aman tanpa connection string/stack trace."""
+    if isinstance(exc, DatabaseNotConfiguredError):
+        return HTTPException(
+            status_code=503,
+            detail="Database Supabase belum dikonfigurasi pada server.",
+        )
+    if isinstance(exc, TransactionNotFoundError):
+        return HTTPException(status_code=404, detail="Transaksi tidak ditemukan.")
+    if isinstance(exc, TransactionConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, DatabaseSchemaError):
+        logger.error("Schema database CatatKas tidak kompatibel: %s", exc)
+        return HTTPException(
+            status_code=500,
+            detail="Schema tabel Supabase belum sesuai dengan CatatKas.",
+        )
+    logger.exception("Operasi database Supabase gagal")
+    return HTTPException(
+        status_code=503,
+        detail="Database Supabase tidak dapat dijangkau. Silakan coba lagi.",
     )
 
 
@@ -257,12 +514,167 @@ async def _save_upload_to_temp(file: UploadFile, suffix: str) -> Path:
 
 @app.on_event("startup")
 def warmup():
+    if not config.MODEL_WARMUP_ON_STARTUP:
+        logger.info("Warmup Llama dinonaktifkan; model dimuat saat ekstraksi pertama.")
+        return
     from .inference import get_pipeline
     get_pipeline()
 
 
-@app.post("/extract")
-def extract(req: ExtractRequest):
+@app.post("/auth/register", name="auth.register")
+async def register_user(
+    credentials: AuthCredentials,
+    request: Request,
+    response: Response,
+):
+    """Daftarkan akun Supabase dan buat cookie jika konfirmasi email tidak wajib."""
+    request.state.audit_metadata = {
+        "user_email": str(credentials.email),
+        "method": "register",
+        "input": {"email": str(credentials.email)},
+    }
+    try:
+        session = await register_supabase_user(
+            str(credentials.email), credentials.password
+        )
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        raise _auth_http_error(exc) from None
+    # REST Supabase mengembalikan UserSchema langsung ketika konfirmasi email aktif,
+    # tetapi mengembalikan AccessTokenResponse.user ketika auto-confirm aktif.
+    user_payload = session.get("user") or (session if session.get("id") else {})
+    user_id = str(user_payload.get("id") or "").strip() or None
+    if not user_id:
+        raise HTTPException(status_code=503, detail="Respons registrasi tidak valid.")
+    if user_id:
+        request.state.audit_user_id = user_id
+    authenticated = bool(session.get("access_token") and session.get("refresh_token"))
+    if authenticated:
+        _set_session_cookies(response, session)
+    return {
+        "success": True,
+        "data": {
+            "user": {
+                "id": user_id,
+                "email": user_payload.get("email") or str(credentials.email),
+            },
+            "authenticated": authenticated,
+            "requires_email_confirmation": not authenticated,
+        },
+        "error": None,
+    }
+
+
+@app.post("/auth/login", name="auth.login")
+async def login_user(
+    credentials: AuthCredentials,
+    request: Request,
+    response: Response,
+):
+    """Login Supabase dan simpan token hanya dalam cookie HttpOnly."""
+    request.state.audit_metadata = {
+        "user_email": str(credentials.email),
+        "method": "login",
+        "input": {"email": str(credentials.email)},
+    }
+    try:
+        session = await login_supabase_user(str(credentials.email), credentials.password)
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        raise _auth_http_error(exc) from None
+    user_payload = session.get("user") or {}
+    user_id = str(user_payload.get("id") or "").strip()
+    if (
+        not user_id
+        or not session.get("access_token")
+        or not session.get("refresh_token")
+    ):
+        raise HTTPException(status_code=503, detail="Session login tidak valid.")
+    request.state.audit_user_id = user_id
+    _set_session_cookies(response, session)
+    return {
+        "success": True,
+        "data": {
+            "user": {"id": user_id, "email": user_payload.get("email")},
+            "authenticated": True,
+        },
+        "error": None,
+    }
+
+
+@app.post("/auth/refresh", name="auth.refresh")
+async def refresh_user_session(request: Request, response: Response):
+    """Perbarui session tanpa mengekspos refresh token ke frontend."""
+    refresh_token = request.cookies.get(config.AUTH_REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Session login telah berakhir.")
+    try:
+        session = await refresh_supabase_session(refresh_token)
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        _clear_session_cookies(response)
+        raise _auth_http_error(exc) from None
+    user_payload = session.get("user") or {}
+    user_id = str(user_payload.get("id") or "").strip() or None
+    if (
+        not user_id
+        or not session.get("access_token")
+        or not session.get("refresh_token")
+    ):
+        _clear_session_cookies(response)
+        raise HTTPException(status_code=503, detail="Session login tidak valid.")
+    if user_id:
+        request.state.audit_user_id = user_id
+        request.state.audit_metadata = {"user_email": user_payload.get("email")}
+    _set_session_cookies(response, session)
+    return {
+        "success": True,
+        "data": {
+            "user": {"id": user_id, "email": user_payload.get("email")},
+            "authenticated": True,
+        },
+        "error": None,
+    }
+
+
+@app.get("/auth/me", name="auth.me")
+async def current_user(user: AuthenticatedUser = Depends(require_authenticated_user)):
+    """Kembalikan identitas session aktif tanpa token."""
+    return {
+        "success": True,
+        "data": {"user": {"id": user.id, "email": user.email}},
+        "error": None,
+    }
+
+
+@app.post("/auth/logout", name="auth.logout")
+async def logout_user(request: Request, response: Response):
+    """Cabut session Supabase dan selalu hapus cookie lokal."""
+    access_token = request.cookies.get(config.AUTH_ACCESS_COOKIE_NAME)
+    try:
+        if access_token:
+            try:
+                user = await get_supabase_user(access_token)
+                request.state.audit_user_id = user.id
+                request.state.audit_metadata = {"user_email": user.email}
+            except (AuthConfigurationError, AuthServiceError):
+                pass
+            await logout_supabase_user(access_token)
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        logger.warning("Logout remote gagal: %s", exc)
+    finally:
+        _clear_session_cookies(response)
+    return {"success": True, "data": {"logged_out": True}, "error": None}
+
+
+@app.post("/extract", name="extract.text")
+def extract(
+    req: ExtractRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    request: Request = None,
+):
+    _merge_audit_metadata(
+        request,
+        method="text",
+        input={"text": req.text, "reference_date": req.reference_date},
+    )
     reference_date = date.fromisoformat(req.reference_date) if req.reference_date else None
     result = extract_transaction(req.text, reference_date=reference_date)
 
@@ -272,21 +684,34 @@ def extract(req: ExtractRequest):
     return result
 
 
-@app.post("/extract/audio")
+@app.post("/extract/audio", name="extract.audio")
 async def extract_audio(
     file: UploadFile = File(...),
     reference_date: Optional[str] = Form(None),
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    request: Request = None,
 ):
     """Transkripsikan satu rekaman dan ekstrak satu transaksi terstruktur."""
+    audit_input = {
+        "reference_date": reference_date,
+        "audio": {
+            "content_type": file.content_type,
+        },
+    }
+    _merge_audit_metadata(request, method="voice", input=audit_input)
     parsed_reference_date = _parse_reference_date(reference_date)
     suffix = _resolve_audio_suffix(file)
+    audit_input["audio"]["format"] = suffix.removeprefix(".")
     temp_path: Optional[Path] = None
     request_id = uuid.uuid4().hex[:8]
 
     try:
         temp_path = await _save_upload_to_temp(file, suffix)
+        audit_input["audio"]["size_bytes"] = temp_path.stat().st_size
         transcript = await run_in_threadpool(transcribe_audio, temp_path)
         transcript = transcript.strip()
+        audit_input["transcript"] = transcript
+        _merge_audit_metadata(request, method="voice", input=audit_input)
         logger.info("[voice:%s] transcript=%r", request_id, transcript)
         if not transcript:
             raise HTTPException(
@@ -294,7 +719,33 @@ async def extract_audio(
                 detail="Tidak ditemukan ucapan yang dapat dikenali pada audio",
             )
 
-        normalized_text = normalize_indonesian_numbers(transcript)
+        llama_corrected_text = transcript
+        normalization_method = "rule_based"
+        if config.VOICE_LLM_NORMALIZATION_ENABLED:
+            try:
+                llama_corrected_text = await run_in_threadpool(
+                    correct_voice_transcript_with_llama,
+                    transcript,
+                )
+                normalization_method = "llama_3.2_base_and_rule_based"
+            except Exception:
+                normalization_method = "rule_based_fallback"
+                logger.exception(
+                    "[voice:%s] Koreksi typo Llama gagal; memakai fallback",
+                    request_id,
+                )
+
+        normalized_text = normalize_voice_transaction_text(llama_corrected_text)
+        audit_input["llama_corrected_text"] = llama_corrected_text
+        audit_input["normalized_text"] = normalized_text
+        audit_input["normalization_method"] = normalization_method
+        _merge_audit_metadata(request, method="voice", input=audit_input)
+        logger.info(
+            "[voice:%s] llama_corrected_text=%r method=%s",
+            request_id,
+            llama_corrected_text,
+            normalization_method,
+        )
         logger.info("[voice:%s] normalized_text=%r", request_id, normalized_text)
         result = await run_in_threadpool(
             extract_transaction,
@@ -335,26 +786,55 @@ async def extract_audio(
             _delete_temp_file(temp_path)
 
 
-@app.post("/extract/receipt")
+@app.post("/extract/receipt", name="extract.receipt")
 async def extract_receipt_endpoint(
     file: UploadFile = File(...),
     reference_date: Optional[str] = Form(None),
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    request: Request = None,
 ):
     """Baca satu foto nota dan kembalikan kandidat untuk konfirmasi pengguna."""
+    audit_input = {
+        "reference_date": reference_date,
+        "image": {"content_type": file.content_type},
+    }
+    _merge_audit_metadata(request, method="receipt", input=audit_input)
     parsed_reference_date = _parse_reference_date(reference_date)
     effective_reference_date = parsed_reference_date or date.today()
     suffix, expected_format = _resolve_receipt_upload(file)
+    audit_input["image"]["format"] = expected_format
     temp_path: Optional[Path] = None
     request_id = uuid.uuid4().hex[:8]
 
     try:
         temp_path = await _save_receipt_upload(file, suffix)
+        audit_input["image"]["size_bytes"] = temp_path.stat().st_size
         await run_in_threadpool(
             validate_receipt_image,
             temp_path,
             expected_format,
         )
         parsed = await run_in_threadpool(extract_receipt, temp_path)
+        full_ocr_text = str(parsed.get("ocr_text") or "")
+        compact_ocr_text = str(parsed.get("ocr_model_text") or full_ocr_text)
+        model_ocr_text = (
+            compact_ocr_text
+            if config.RECEIPT_OCR_COMPACT_FOR_MODEL
+            else full_ocr_text
+        )
+        parsed["ocr_model_text"] = model_ocr_text
+        ocr_text, ocr_text_truncated = _limited_audit_text(full_ocr_text)
+        audit_model_text, audit_model_text_truncated = _limited_audit_text(
+            model_ocr_text
+        )
+        audit_input.update(
+            ocr_text=ocr_text,
+            ocr_text_truncated=ocr_text_truncated,
+            ocr_model_text=audit_model_text,
+            ocr_model_text_truncated=audit_model_text_truncated,
+            ocr_compacted=model_ocr_text != full_ocr_text,
+        )
+        _merge_audit_metadata(request, method="receipt", input=audit_input)
         if not parsed.get("ocr_text") or parsed.get("receipt") is None:
             raise HTTPException(
                 status_code=422,
@@ -378,13 +858,20 @@ async def extract_receipt_endpoint(
             rule_receipt.get("total") is not None,
             parsed.get("date") is not None,
         )
+        logger.info(
+            "[receipt:%s] ocr_chars=%d model_ocr_chars=%d compacted=%s",
+            request_id,
+            len(full_ocr_text),
+            len(model_ocr_text),
+            model_ocr_text != full_ocr_text,
+        )
 
         extraction_method = "llama_soft_prompt_receipt"
         if config.RECEIPT_LLM_ENABLED:
             try:
                 semantic_result = await run_in_threadpool(
                     extract_receipt_with_llama,
-                    parsed["ocr_text"],
+                    model_ocr_text,
                     effective_reference_date,
                     parsed,
                 )
@@ -451,7 +938,7 @@ async def extract_receipt_endpoint(
             "requires_confirmation": True,
             "data": response_data,
             "ocr_text": parsed["ocr_text"],
-            "total_candidates": parsed.get("total_candidates", []),
+            "ocr_model_text": model_ocr_text,
             "extraction_method": extraction_method,
             "validation": {
                 "status": validation["status"],
@@ -481,9 +968,241 @@ async def extract_receipt_endpoint(
             _delete_temp_file(temp_path)
 
 
-@app.get("/health")
+@app.get("/health", name="health.api")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/database", name="health.database")
+def database_health():
+    """Periksa konfigurasi dan koneksi Supabase tanpa membuka rahasia koneksi."""
+    if not database_is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Database Supabase belum dikonfigurasi pada server.",
+        )
+    try:
+        get_transaction_repository().check_connection()
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    return {"status": "ok", "database": "connected"}
+
+
+@app.get("/health/auth", name="health.auth")
+def auth_health():
+    """Periksa kelengkapan konfigurasi Supabase Auth tanpa mengirim key."""
+    if not auth_is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase Auth belum dikonfigurasi pada server.",
+        )
+    return {"status": "ok", "auth": "configured"}
+
+
+@app.get("/transactions", name="transaction.list")
+def list_transactions(
+    request: Request,
+    limit: int = Query(default=500, ge=1, le=500),
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Ambil riwayat transaksi dari Supabase, termasuk rincian nota."""
+    try:
+        records = get_transaction_repository().list(user.id, limit=limit)
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    _merge_audit_metadata(
+        request,
+        method="list",
+        input={"limit": limit},
+        record_count=len(records),
+    )
+    return {"success": True, "data": records, "error": None}
+
+
+@app.get("/transactions/{transaction_id}", name="transaction.get")
+def get_transaction(
+    transaction_id: uuid.UUID,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Ambil satu detail transaksi berdasarkan UUID."""
+    try:
+        record = get_transaction_repository().get(str(transaction_id), user.id)
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+        TransactionNotFoundError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    request.state.audit_entity_type = "transaction"
+    request.state.audit_entity_id = str(transaction_id)
+    _merge_audit_metadata(
+        request,
+        method="detail",
+        input={"transaction_id": str(transaction_id)},
+    )
+    return {"success": True, "data": record, "error": None}
+
+
+@app.post("/transactions", status_code=201, name="transaction.create")
+def create_transaction_record(
+    payload: TransactionCreate,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Simpan satu transaksi terkonfirmasi ke Supabase."""
+    try:
+        record = get_transaction_repository().create(payload, user.id)
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    request.state.audit_entity_type = "transaction"
+    request.state.audit_entity_id = record["id"]
+    _merge_audit_metadata(
+        request,
+        source=payload.source,
+        method=payload.source,
+        input=payload.model_dump(mode="json"),
+    )
+    return {"success": True, "data": record, "error": None}
+
+
+@app.post("/transactions/import", name="transaction.import")
+def import_local_transactions(
+    payload: TransactionImport,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Migrasikan maksimal 50 transaksi lokal jika database masih kosong."""
+    try:
+        records = get_transaction_repository().import_if_empty(
+            payload.transactions, user.id
+        )
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    _merge_audit_metadata(
+        request,
+        method="import",
+        input={
+            "transactions": [
+                transaction.model_dump(mode="json")
+                for transaction in payload.transactions
+            ]
+        },
+        requested_count=len(payload.transactions),
+        result_count=len(records),
+    )
+    return {"success": True, "data": records, "error": None}
+
+
+@app.put("/transactions/{transaction_id}", name="transaction.update")
+def update_transaction_record(
+    transaction_id: uuid.UUID,
+    payload: TransactionUpdate,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Perbarui transaksi tanpa menghapus receipt items yang sudah tersimpan."""
+    try:
+        record = get_transaction_repository().update(
+            str(transaction_id), payload, user.id
+        )
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+        TransactionConflictError,
+        TransactionNotFoundError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    request.state.audit_entity_type = "transaction"
+    request.state.audit_entity_id = str(transaction_id)
+    _merge_audit_metadata(
+        request,
+        method="edit",
+        input={
+            "transaction_id": str(transaction_id),
+            "changes": payload.model_dump(
+                mode="json",
+                exclude_unset=True,
+            ),
+        },
+        updated_fields=sorted(payload.model_fields_set),
+    )
+    return {"success": True, "data": record, "error": None}
+
+
+@app.delete("/transactions/{transaction_id}", name="transaction.delete")
+def delete_transaction_record(
+    transaction_id: uuid.UUID,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Hapus transaksi dan seluruh rincian notanya secara atomik."""
+    try:
+        get_transaction_repository().delete(str(transaction_id), user.id)
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+        TransactionNotFoundError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    request.state.audit_entity_type = "transaction"
+    request.state.audit_entity_id = str(transaction_id)
+    _merge_audit_metadata(
+        request,
+        method="delete",
+        input={"transaction_id": str(transaction_id)},
+    )
+    return {
+        "success": True,
+        "data": {"id": str(transaction_id)},
+        "error": None,
+    }
+
+
+@app.delete("/transactions", name="transaction.clear")
+def clear_transaction_records(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+):
+    """Hapus seluruh riwayat CatatKas dari Supabase."""
+    try:
+        deleted = get_transaction_repository().clear(user.id)
+    except (
+        DatabaseNotConfiguredError,
+        DatabaseSchemaError,
+        DatabaseUnavailableError,
+    ) as exc:
+        raise _database_http_error(exc) from None
+    _merge_audit_metadata(
+        request,
+        method="clear",
+        input={"scope": "all_user_transactions"},
+        deleted_count=deleted,
+    )
+    return {
+        "success": True,
+        "data": {"deleted": deleted},
+        "error": None,
+    }
 
 
 # Mount terakhir agar route API di atas tetap memiliki prioritas dan tidak tertutup

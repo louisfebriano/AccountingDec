@@ -3,10 +3,19 @@ import assert from "node:assert/strict";
 
 import {
   ApiError,
+  createTransactionRemote,
+  deleteTransactionRemote,
   extractAudio,
   extractReceipt,
   extractText,
+  getCurrentUser,
   getLocalReferenceDate,
+  importLocalTransactions,
+  listTransactions,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
+  updateTransactionRemote,
 } from "../../pwa/api.js";
 
 const successfulPayload = {
@@ -121,4 +130,95 @@ test("foto nota dikirim sebagai FormData ke endpoint baru", async () => {
   assert.ok(captured.options.body instanceof FormData);
   assert.equal(captured.options.body.get("reference_date"), "2026-08-26");
   assert.equal(captured.options.headers, undefined);
+});
+
+test("CRUD transaksi memakai endpoint backend dan payload tanpa id lokal", async () => {
+  const requests = [];
+  const record = {
+    id: "local-id",
+    source: "manual",
+    transaction_type: "expense",
+    item_name: "Gas LPG",
+    quantity: 3,
+    unit: "tabung",
+    total_price: 125000,
+    date: "2026-08-23",
+    note: "Belanja warung",
+    created_at: "2026-08-23T10:00:00Z",
+  };
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    const data = options.method === "DELETE" ? { id: "server-id" } : record;
+    return new Response(JSON.stringify({ success: true, data, error: null }), {
+      status: options.method === "POST" ? 201 : 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await createTransactionRemote(record, { fetchImpl });
+  await updateTransactionRemote("server-id", { total_price: 130000 }, { fetchImpl });
+  await deleteTransactionRemote("server-id", { fetchImpl });
+
+  assert.equal(requests[0].url, "/transactions");
+  const createBody = JSON.parse(requests[0].options.body);
+  assert.equal(createBody.id, undefined);
+  assert.equal(createBody.created_at, undefined);
+  assert.equal(createBody.total_price, 125000);
+  assert.equal(requests[1].url, "/transactions/server-id");
+  assert.deepEqual(JSON.parse(requests[1].options.body), { total_price: 130000 });
+  assert.equal(requests[2].options.method, "DELETE");
+});
+
+test("riwayat Supabase dapat dibaca dan localStorage dapat diimpor", async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ success: true, data: [], error: null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await listTransactions({ fetchImpl });
+  await importLocalTransactions([], { fetchImpl });
+
+  assert.equal(requests[0].url, "/transactions?limit=500");
+  assert.equal(requests[0].options.method, "GET");
+  assert.equal(requests[1].url, "/transactions/import");
+  assert.deepEqual(JSON.parse(requests[1].options.body), { transactions: [] });
+});
+
+test("login dan register memakai endpoint backend dengan cookie first-party", async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        authenticated: true,
+        user: { id: "user-id", email: "user@example.com" },
+      },
+      error: null,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await loginAccount("user@example.com", "password-kuat", { fetchImpl });
+  await registerAccount("baru@example.com", "password-kuat", { fetchImpl });
+  await getCurrentUser({ fetchImpl });
+  await logoutAccount({ fetchImpl });
+
+  assert.deepEqual(requests.map((item) => item.url), [
+    "/auth/login",
+    "/auth/register",
+    "/auth/me",
+    "/auth/logout",
+  ]);
+  assert.equal(requests[0].options.credentials, "same-origin");
+  assert.deepEqual(JSON.parse(requests[0].options.body), {
+    email: "user@example.com",
+    password: "password-kuat",
+  });
 });

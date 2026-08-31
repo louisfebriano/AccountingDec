@@ -5,12 +5,29 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from src import api
+from src.auth_service import AuthenticatedUser
 
 
 client = TestClient(api.app)
 
 
 class PwaStaticTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.audit_patch = patch.object(api.config, "AUDIT_LOG_ENABLED", False)
+        cls.audit_patch.start()
+        api.app.dependency_overrides[api.require_authenticated_user] = lambda: (
+            AuthenticatedUser(
+                id="11111111-1111-4111-8111-111111111111",
+                email="user@example.com",
+            )
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        api.app.dependency_overrides.pop(api.require_authenticated_user, None)
+        cls.audit_patch.stop()
+
     def test_home_manifest_and_service_worker_are_accessible(self):
         home = client.get("/")
         manifest = client.get("/manifest.webmanifest")
@@ -23,7 +40,7 @@ class PwaStaticTests(unittest.TestCase):
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json()["display"], "standalone")
         self.assertEqual(worker.status_code, 200)
-        self.assertIn("catatkas-shell-v17", worker.text)
+        self.assertIn("catatkas-shell-v21", worker.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn("--primary-color: #03bfb5", styles.text)
         self.assertIn("--secondary-color: #018076", styles.text)
@@ -43,6 +60,10 @@ class PwaStaticTests(unittest.TestCase):
         self.assertIn('id="receipt-file"', home.text)
         self.assertIn('capture="environment"', home.text)
         self.assertIn('id="receipt-confirm-dialog"', home.text)
+        self.assertIn('id="login-form"', home.text)
+        self.assertIn('id="register-form"', home.text)
+        self.assertIn('id="logout-button"', home.text)
+        self.assertIn('id="action-popup"', home.text)
 
     def test_pwa_icons_have_expected_png_dimensions(self):
         expected = {

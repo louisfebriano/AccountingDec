@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from starlette.datastructures import Headers, UploadFile
 
 from src import api
@@ -20,6 +20,18 @@ def make_upload(
         file=io.BytesIO(content),
         filename=filename,
         headers=Headers({"content-type": content_type}),
+    )
+
+
+def make_request(path: str) -> Request:
+    """Buat request minimal untuk memeriksa metadata audit endpoint langsung."""
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": [],
+        }
     )
 
 
@@ -43,6 +55,17 @@ def successful_extraction(text, adapter_path=None, reference_date=None):
 
 
 class ExtractAudioEndpointTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.llama_corrector_patch = patch.object(
+            api,
+            "correct_voice_transcript_with_llama",
+            side_effect=lambda text: text,
+        )
+        self.llama_corrector = self.llama_corrector_patch.start()
+
+    def tearDown(self):
+        self.llama_corrector_patch.stop()
+
     async def test_rejects_empty_audio_file(self):
         transcribe = Mock()
 
@@ -156,6 +179,89 @@ class ExtractAudioEndpointTests(unittest.IsolatedAsyncioTestCase):
             reference_date=date(2026, 8, 21),
         )
 
+    async def test_ristok_is_normalized_and_voice_input_is_added_to_audit(self):
+        transcript = "Tadi Ristok Galon Aqua 15 Botol abis 52.000"
+        request = make_request("/extract/audio")
+        extract = Mock(side_effect=successful_extraction)
+
+        with (
+            patch.object(api, "transcribe_audio", return_value=transcript),
+            patch.object(api, "extract_transaction", extract),
+            self.assertLogs(api.logger, level="INFO"),
+        ):
+            response = await api.extract_audio(
+                make_upload(),
+                "2026-08-29",
+                request=request,
+            )
+
+        expected = "Tadi restok Galon Aqua 15 Botol abis 52.000"
+        self.assertEqual(response["transcript"], transcript)
+        self.assertEqual(response["normalized_text"], expected)
+        extract.assert_called_once_with(
+            expected,
+            reference_date=date(2026, 8, 29),
+        )
+        metadata = request.state.audit_metadata
+        self.assertEqual(metadata["method"], "voice")
+        self.assertEqual(metadata["input"]["transcript"], transcript)
+        self.assertEqual(metadata["input"]["normalized_text"], expected)
+        self.assertEqual(
+            metadata["input"]["normalization_method"],
+            "llama_3.2_base_and_rule_based",
+        )
+        self.assertEqual(metadata["input"]["audio"]["format"], "wav")
+        self.assertGreater(metadata["input"]["audio"]["size_bytes"], 0)
+
+    async def test_llama_typo_correction_is_used_as_normalized_pipeline_input(self):
+        transcript = "beli tepung 4 karong 44 ribu"
+        corrected = "beli tepung 4 karung 44 ribu"
+        self.llama_corrector.side_effect = None
+        self.llama_corrector.return_value = corrected
+        extract = Mock(side_effect=successful_extraction)
+
+        with (
+            patch.object(api, "transcribe_audio", return_value=transcript),
+            patch.object(api, "extract_transaction", extract),
+            self.assertLogs(api.logger, level="INFO"),
+        ):
+            response = await api.extract_audio(make_upload(), "2026-08-29")
+
+        self.assertEqual(response["transcript"], transcript)
+        self.assertEqual(response["normalized_text"], corrected)
+        self.llama_corrector.assert_called_with(transcript)
+        extract.assert_called_once_with(
+            corrected,
+            reference_date=date(2026, 8, 29),
+        )
+
+    async def test_llama_typo_failure_falls_back_without_failing_voice_request(self):
+        transcript = "beli tepung 4 karong 44 ribu"
+        self.llama_corrector.side_effect = RuntimeError("private model detail")
+        extract = Mock(side_effect=successful_extraction)
+        request = make_request("/extract/audio")
+
+        with (
+            patch.object(api, "transcribe_audio", return_value=transcript),
+            patch.object(api, "extract_transaction", extract),
+            self.assertLogs(api.logger, level="ERROR"),
+        ):
+            response = await api.extract_audio(
+                make_upload(),
+                "2026-08-29",
+                request=request,
+            )
+
+        self.assertTrue(response["success"])
+        self.assertEqual(
+            response["normalized_text"],
+            "beli tepung 4 karung 44 ribu",
+        )
+        self.assertEqual(
+            request.state.audit_metadata["input"]["normalization_method"],
+            "rule_based_fallback",
+        )
+
     async def test_general_income_voice_uses_deterministic_pipeline(self):
         from src import inference
 
@@ -251,13 +357,15 @@ class ExtractAudioEndpointTests(unittest.IsolatedAsyncioTestCase):
 class LegacyTextEndpointTests(unittest.TestCase):
     def test_extract_text_keeps_original_input_unchanged(self):
         result = successful_extraction("beli dua karung total 250000")
+        request = make_request("/extract")
 
         with patch.object(api, "extract_transaction", return_value=result) as extract:
             response = api.extract(
                 api.ExtractRequest(
                     text="beli dua karung total 250000",
                     reference_date="2026-08-21",
-                )
+                ),
+                request=request,
             )
 
         self.assertIs(response, result)
@@ -275,6 +383,14 @@ class LegacyTextEndpointTests(unittest.TestCase):
         extract.assert_called_once_with(
             "beli dua karung total 250000",
             reference_date=date(2026, 8, 21),
+        )
+        self.assertEqual(request.state.audit_metadata["method"], "text")
+        self.assertEqual(
+            request.state.audit_metadata["input"],
+            {
+                "text": "beli dua karung total 250000",
+                "reference_date": "2026-08-21",
+            },
         )
 
     def test_unknown_text_transaction_returns_error_before_model(self):

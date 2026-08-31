@@ -13,8 +13,6 @@ from .date_utils import resolve_date
 from .price_utils import extract_price_from_text
 from .transaction_type import TransactionType
 
-ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
 _PRICE_EXPRESSION_PATTERN = re.compile(
     r"(?:rp\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s*"
     r"(?:ribu|rebu|rb|ratus|juta|jt|k)\b|"
@@ -183,16 +181,6 @@ class TransaksiSchema(BaseModel):
     total_price: Optional[float] = None
     date: Optional[str] = None
     transaction_type: TransactionType = "unknown"
-
-
-def _is_valid_iso_date(value: Optional[str]) -> bool:
-    if not value or not ISO_DATE_PATTERN.match(value):
-        return False
-    try:
-        date.fromisoformat(value)
-        return True
-    except ValueError:
-        return False
 
 
 def _extract_clear_sale_details(text: str) -> Optional[dict]:
@@ -389,10 +377,10 @@ def parse_and_validate(
     karena model kadang lanjut generate pola few-shot lain).
 
     Aturan pengisian field "date":
-    1. Kalau model sudah kasih tanggal format ISO valid -> dipakai apa adanya.
-    2. Kalau tidak, coba resolve dari kata relatif di kalimat ("kemarin", "besok", dll).
-    3. Kalau masih tidak ketemu -> default ke reference_date (hari ini kalau tidak dikirim
-       eksplisit), asumsinya transaksi tanpa keterangan waktu terjadi saat dicatat.
+    1. Tanggal eksplisit atau relatif diselesaikan secara rule-based dari kalimat.
+    2. Kalau kalimat tidak menyebut tanggal, gunakan reference_date (hari ini kalau
+       tidak dikirim eksplisit). Tanggal keluaran model tidak dipercaya agar tanggal
+       halusinasi tidak tersimpan.
 
     Aturan pengisian field "total_price":
     Kalau user_input mengandung pola "angka+akhiran ribuan/ratusan" yang jelas
@@ -427,15 +415,10 @@ def parse_and_validate(
     reference_date = reference_date or date.today()
 
     # ---- Resolve date ----
-    # Prioritas: kalau kalimat mengandung kata/pola tanggal relatif ("kemarin", "3 hari lalu",
-    # dll), SELALU pakai hasil resolver -- jangan percaya tanggal dari model sama sekali untuk
-    # kasus ini, karena model bisa hallucinate tanggal yang formatnya valid tapi isinya ngasal
-    # (mirip alasan kenapa total_price di-override lewat rule juga).
+    # Tanggal selalu berasal dari teks atau reference_date. Jangan percaya tanggal model
+    # karena model dapat menghasilkan tanggal ISO yang valid tetapi tidak disebut pengguna.
     resolved = resolve_date(user_input, reference_date) if user_input else None
-    if resolved is not None:
-        result_data["date"] = resolved
-    elif not _is_valid_iso_date(result_data.get("date")):
-        result_data["date"] = reference_date.isoformat()
+    result_data["date"] = resolved or reference_date.isoformat()
 
     # ---- Override total_price kalau pola harga eksplisit ketemu di kalimat asli ----
     if user_input:
