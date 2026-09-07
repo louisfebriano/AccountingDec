@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from src import train_receipt
@@ -77,6 +79,14 @@ class FakeTorch:
 
 
 class ReceiptTrainingDataTests(unittest.TestCase):
+    def test_optional_dataset_returns_empty_for_missing_or_blank_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.jsonl"
+            blank = Path(directory) / "blank.jsonl"
+            blank.write_text("\n", encoding="utf-8")
+            self.assertEqual(train_receipt.load_optional_receipt_jsonl(missing), [])
+            self.assertEqual(train_receipt.load_optional_receipt_jsonl(blank), [])
+
     def test_valid_row_preserves_ocr_line_breaks(self):
         prepared = train_receipt.validate_receipt_training_row(row())
         self.assertEqual(prepared["input"], "TOKO BERKAH\nTOTAL 53.000")

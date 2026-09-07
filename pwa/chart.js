@@ -227,6 +227,18 @@ export function aggregateTransactionsByPeriod(history, bounds, today = new Date(
   return { points, granularity, bounds: resolvedBounds };
 }
 
+// Lebar SVG selalu 100% panel, jadi tingginya ikut lebar layar. Di layar lebar
+// kanvas dipendekkan 20%; di hp ruangnya sudah sempit, jadi rasio penuh
+// dipertahankan supaya grafik tidak jadi terlalu ceper.
+export const CHART_WIDE_HEIGHT = 216;
+export const CHART_COMPACT_HEIGHT = 270;
+export const CHART_WIDE_MEDIA_QUERY = "(min-width: 480px)";
+
+export function chartHeight() {
+  const query = globalThis.matchMedia?.(CHART_WIDE_MEDIA_QUERY);
+  return query && !query.matches ? CHART_COMPACT_HEIGHT : CHART_WIDE_HEIGHT;
+}
+
 function svgElement(name, attributes = {}) {
   const element = document.createElementNS(SVG_NS, name);
   Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
@@ -240,7 +252,7 @@ function linePath(points, key, xFor, yFor) {
 export function renderTransactionChart(svg, points, options = {}) {
   svg.replaceChildren();
   const width = 700;
-  const height = 270;
+  const height = chartHeight();
   const margin = { top: 20, right: 18, bottom: 42, left: 72 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;

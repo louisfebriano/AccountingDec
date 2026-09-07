@@ -9,6 +9,20 @@ __pycache__/
 /data/processed/eval-relative.jsonl
 /data/raw/
 
+# Foto nota nyata bersifat lokal. Struktur folder dan petunjuk tetap dilacak,
+# tetapi file gambar pengguna tidak masuk repository secara tidak sengaja.
+/data/processed/image/*
+!/data/processed/image/README.md
+!/data/processed/image/train/
+!/data/processed/image/validation/
+!/data/processed/image/evaluation/
+/data/processed/image/train/*
+!/data/processed/image/train/.gitkeep
+/data/processed/image/validation/*
+!/data/processed/image/validation/.gitkeep
+/data/processed/image/evaluation/*
+!/data/processed/image/evaluation/.gitkeep
+
 eval_results.json
 /results/
 /receipt-evaluation-report.json

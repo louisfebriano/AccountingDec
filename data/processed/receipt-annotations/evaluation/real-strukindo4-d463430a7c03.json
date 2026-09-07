@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo4-d463430a7c03",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "evaluation",
+  "source_image": "evaluation/strukindo4.jpg",
+  "source_sha256": "d463430a7c03b442b0f5ea464c880e8a9744c5fd1c3b0899e9b3590f003a17c7",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "RARAT-JAICARTAUTARA LANCOL 1910.ANCOL TINDCRM\nPWP.01337994.6-092.000\nRAGUNAN RAYA/008\nJLRAGUNAN RAYA NO.19RT.02RW.07,PASAR M\nINGGU,TANG SEL,12540\n26.01.16-16:53 2.0.14 151508/TANTI/01\nSTELLA A/F LEM0N 400 121500 21,500\nDISKON (3,600)\nS0 KLIN S0FTERGNT800 113600 13,600\nDISKON 2,100\nB0OM DETERGN BBK 400 1 5000 5,000\nSARI/W CLP ASLI 50'S 1 9900 9,900\nINDOMI GORENG SPC 80 10 2100 21,000\nBANGO KECAP MANIS135 1 7600 7,600\nINDOF00D SBLPD/M140 1 5200 5,200\nIDM CT.BUD BABY R100 1 5800 5,800\nPLASTIK BSR 2 1 2\nDISKON: (2)\nHARGAJUAL 83,900\nDISKONINDOMIEGORENG: 1,000\nDISKON INDOMIE GORENG: (1,000)\nTOTAL: 81,900\nTUNAI: 100,000\nKEMBALI : 18,100\nANDAHEMAT: 7.700\nPPN DPP=81,455PPN=8,145\nTERIMA KASIH.SELAMAT BELANJA KEMBALI\n=LAYANAN KONSUMEN INDOMARET===\nCALL(021)1500580SMS:0816500 580 EMAILKONTAKINDOMARET.CO.1D\n=INFOLENGKAP PROMOS1.",
+    "text": "RARAT-JAICARTAUTARA LANCOL 1910.ANCOL TINDCRM\nPWP.01337994.6.092.000\nRAGUNAN RAYA/008\nJLRAGUNAN RAYA NO.19RT.02RW.07,PASAR M\nINGGU,TANG SEL,12540\n26.01.16-16:53 2.0.14 151508/TANTI/01\nSTELLA A/F LEM0N 400 121500 21,500\nDISKON (3,600)\nS0 KLIN S0FTERGNT800 113600 13,600\nDISKON 2,100\nB0OM DETERGN BBK 400 1 5000 5,000\nSARI/W CLP ASLI 50'S 1 9900 9,900\nINDOMI GORENG SPC 80 10 2100 21,000\nBANGO KECAP MANIS135 1 7600 7,600\nINDOF00D SBLPD/M140 1 5200 5,200\nIDM CT.BUD BABY R100 1 5800 5,800\nPLASTIK BSR 2 1 2\nDISKON: (2)\nHARGAJUAL 83,900\nDISKONINDOMIEGORENG: 1,000\nDISKON INDOMIE GORENG: (1,000)\nTOTAL: 81,900\nTUNAI: 100,000\nKEMBALI : 18,100\nANDAHEMAT: 7.700\nPPN DPP=81,455PPN=8,145\nTERIMA KASIH.SELAMAT BELANJA\nKEMBALI\n=LAYANAN KONSUMEN INDOMARET===\nCALL(021)1500580SMS:0816500 580 EMAILKONTAKINDOMARET.CO.1D\n=INFOLENGKAP PROMOS1.",
+    "model_text": "RARAT-JAICARTAUTARA LANCOL 1910.ANCOL TINDCRM\nPWP.01337994.6.092.000\n26.01.16-16:53 2.0.14 151508/TANTI/01\nSTELLA A/F LEM0N 400 121500 21,500\nDISKON (3,600)\nS0 KLIN S0FTERGNT800 113600 13,600\nDISKON 2,100\nB0OM DETERGN BBK 400 1 5000 5,000\nSARI/W CLP ASLI 50'S 1 9900 9,900\nINDOMI GORENG SPC 80 10 2100 21,000\nBANGO KECAP MANIS135 1 7600 7,600\nINDOF00D SBLPD/M140 1 5200 5,200\nIDM CT.BUD BABY R100 1 5800 5,800\nDISKON: (2)\nDISKON INDOMIE GORENG: (1,000)\nTOTAL: 81,900\nTUNAI: 100,000\nKEMBALI : 18,100\nPPN DPP=81,455PPN=8,145\nKEMBALI\nCALL(021)1500580SMS:0816500 580 EMAILKONTAKINDOMARET.CO.1D",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 0,
+      "scores": [
+        171.0028,
+        111.2492
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "Indomaret Ragunan Raya",
+    "receipt_number": null,
+    "date": "2016-01-26",
+    "items": [
+      {
+        "item_name": "STELLA A/F LEMON 400",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 21500,
+        "line_total": 21500
+      },
+      {
+        "item_name": "SO KLIN SOFTERGNT800",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 13600,
+        "line_total": 13600
+      },
+      {
+        "item_name": "BOOM DETERGN BBK 400",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 5000,
+        "line_total": 5000
+      },
+      {
+        "item_name": "SARI/W CLP ASLI 50'S",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 9900,
+        "line_total": 9900
+      },
+      {
+        "item_name": "INDOMI GORENG SPC 80",
+        "quantity": 10,
+        "unit": null,
+        "unit_price": 2100,
+        "line_total": 21000
+      },
+      {
+        "item_name": "BANGO KECAP MANIS135",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 7600,
+        "line_total": 7600
+      },
+      {
+        "item_name": "INDOFOOD SBL PD/M140",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 5200,
+        "line_total": 5200
+      },
+      {
+        "item_name": "IDM CT. BUD BABY R100",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 5800,
+        "line_total": 5800
+      }
+    ],
+    "subtotal": 89600,
+    "discount": 7700,
+    "tax": 8145,
+    "service_charge": null,
+    "total": 81900,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; angka 400 dan 800 merupakan ukuran produk, bukan quantity.",
+    "Plastik seharga Rp2 dengan diskon Rp2 tidak dimasukkan sebagai barang."
+  ]
+}

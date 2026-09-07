@@ -160,11 +160,18 @@ def load_prediction_jsonl(path: str | Path) -> list[dict[str, Any]]:
 def collect_model_predictions(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Jalankan adapter nyata; error adapter diteruskan dan tidak difabrikasi."""
     predictions = []
-    for row in rows:
-        result = extract_receipt_with_llama(
-            str(row["input"]),
-            date.fromisoformat(str(row["reference_date"])),
-        )
+    for line_number, row in enumerate(rows, start=1):
+        try:
+            result = extract_receipt_with_llama(
+                str(row["input"]),
+                date.fromisoformat(str(row["reference_date"])),
+            )
+        except ReceiptOutputValidationError as exc:
+            # Output di luar kontrak adalah hasil evaluasi yang sah, bukan crash:
+            # dicatat mentah supaya json_validity_rate melaporkannya apa adanya.
+            print(f"[receipt-eval] baris {line_number} gagal validasi: {exc}")
+            predictions.append({"raw_output": exc.raw_output or ""})
+            continue
         predictions.append({"raw_output": result["raw_output"]})
     return predictions
 

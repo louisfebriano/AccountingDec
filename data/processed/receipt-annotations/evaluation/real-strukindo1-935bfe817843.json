@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo1-935bfe817843",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "evaluation",
+  "source_image": "evaluation/strukindo1.jpeg",
+  "source_sha256": "935bfe817843d0daea3ad87d0058983192b6505ec2f5a88264a82a2e1deb9f70",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "PEXNGPOOD\nJUUOWAATXANGOR-SNIEDMVE K-2-5UM Tndomaret\nW2.151.1006446001\nJATINANGORKM.20-SUMEDA\n14.09.16-06:46 2.0.31 914115/ALIAMU/01\nS/ROTI KRIMKEJU 72G 4 4500 18,000\nCIMORY MIX BERRY 225 1 8500 8,500\nCAFELA EXPRESO 200ML 1 3500 3,500\nFF LOW FAT VAN 225 1 5200 5,200\nPLASTIK SDG 1 1 1\nDISKON (1)\nHARGA JUAL .. 35,200\nDISKON FRISIAN FLAG : 1,300\nTOTAL : 33,900\nTUNAI : 40,000\nKEMBALI : 6,100\nANDA HEMAT : 1,300\nTERIMA KASIH.SELAMATBELANJAKEMBALI\n===LAYANANKONSUMENINDOMARET=\nCALL1500580SMS:0816500580\nEMAIL:KONTAK@INDOMARET.CO.ID\n==INFOLENGKAPPROMOSI===\nWWW.INDOMARET.CO.ID/PROMO",
+    "text": "PEXNGPOOD\nJUUOWAATXANGOR-SNIEDMVE K-2-5UM Tndomaret\nW2.151.1006446001\nJATINANGORKM.20-SUMEDA\n14.09.16-06:46 2.0.31 914115/ALIAMU/01\nS/ROTI KRIMKEJU 72G 4 4500 18,000\nCIMORY MIX BERRY 225 1 8500 8,500\nCAFELA EXPRESO 200ML 1 3500 3,500\nFF LOW FAT VAN 225 1 5200 5,200\nPLASTIK SDG 1 1 1\nDISKON (1)\nHARGA JUAL .. 35,200\nDISKON FRISIAN FLAG : 1,300\nTOTAL : 33,900\nTUNAI : 40,000\nKEMBALI : 6,100\nANDA HEMAT : 1,300\nTERIMA KASIH.SELAMATBELANJAKEMBALI\n===LAYANANKONSUMENINDOMARET=\nCALL1500580SMS:0816500580\nEMAIL:KONTAK@INDOMARET.CO.ID\n==INFOLENGKAPPROMOSI===\nWWW.INDOMARET.CO.ID/PROMO",
+    "model_text": "PEXNGPOOD\nJUUOWAATXANGOR-SNIEDMVE K-2-5UM Tndomaret\nW2.151.1006446001\n14.09.16-06:46 2.0.31 914115/ALIAMU/01\nS/ROTI KRIMKEJU 72G 4 4500 18,000\nCIMORY MIX BERRY 225 1 8500 8,500\nCAFELA EXPRESO 200ML 1 3500 3,500\nFF LOW FAT VAN 225 1 5200 5,200\nDISKON (1)\nHARGA JUAL .. 35,200\nDISKON FRISIAN FLAG : 1,300\nTOTAL : 33,900\nTUNAI : 40,000\nKEMBALI : 6,100\nCALL1500580SMS:0816500580",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 0,
+      "scores": [
+        142.9678,
+        116.4849
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "Indomaret Jatinangor KM.20-Sumedang",
+    "receipt_number": null,
+    "date": "2016-09-14",
+    "items": [
+      {
+        "item_name": "S/ROTI KRIM KEJU 72G",
+        "quantity": 4,
+        "unit": null,
+        "unit_price": 4500,
+        "line_total": 18000
+      },
+      {
+        "item_name": "CIMORY MIX BERRY 225",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 8500,
+        "line_total": 8500
+      },
+      {
+        "item_name": "CAFELA EXPRESO 200ML",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 3500,
+        "line_total": 3500
+      },
+      {
+        "item_name": "FF LOW FAT VAN 225",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 5200,
+        "line_total": 5200
+      }
+    ],
+    "subtotal": 35200,
+    "discount": 1300,
+    "tax": null,
+    "service_charge": null,
+    "total": 33900,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; plastik bernilai nol setelah diskon tidak dimasukkan sebagai barang."
+  ]
+}

@@ -63,6 +63,16 @@ def load_receipt_jsonl(path: str | Path) -> list[dict[str, Any]]:
     return rows
 
 
+def load_optional_receipt_jsonl(path: str | Path | None) -> list[dict[str, Any]]:
+    """Muat dataset tambahan jika ada; file kosong diperlakukan belum disiapkan."""
+    if path is None or not str(path).strip():
+        return []
+    source = Path(path)
+    if not source.is_file() or not source.read_text(encoding="utf-8").strip():
+        return []
+    return load_receipt_jsonl(source)
+
+
 def validate_receipt_training_row(row: Any) -> dict[str, Any]:
     """Validasi satu contoh tanpa memperbaiki target secara otomatis."""
     if not isinstance(row, Mapping):
@@ -251,6 +261,11 @@ def build_receipt_contract(
             "validation": config.RECEIPT_VALIDATION_DATA_PATH,
             "evaluation": config.RECEIPT_EVAL_DATA_PATH,
         },
+        "additional_real_dataset_path": {
+            "train": config.RECEIPT_REAL_TRAIN_DATA_PATH,
+            "validation": config.RECEIPT_REAL_VALIDATION_DATA_PATH,
+            "evaluation": config.RECEIPT_REAL_EVAL_DATA_PATH,
+        },
         "data_origin_counts": {
             origin: sum(row.get("data_origin") == origin for row in train_rows)
             for origin in ("synthetic", "real", "augmented")
@@ -282,8 +297,15 @@ def main() -> None:
     from .model_utils import load_model_for_training, load_tokenizer
 
     train_rows = load_receipt_jsonl(config.RECEIPT_TRAIN_DATA_PATH)
+    train_rows.extend(load_optional_receipt_jsonl(config.RECEIPT_REAL_TRAIN_DATA_PATH))
     validation_rows = load_receipt_jsonl(config.RECEIPT_VALIDATION_DATA_PATH)
+    validation_rows.extend(
+        load_optional_receipt_jsonl(config.RECEIPT_REAL_VALIDATION_DATA_PATH)
+    )
     evaluation_rows = load_receipt_jsonl(config.RECEIPT_EVAL_DATA_PATH)
+    evaluation_rows.extend(
+        load_optional_receipt_jsonl(config.RECEIPT_REAL_EVAL_DATA_PATH)
+    )
     validate_receipt_splits(train_rows, validation_rows, evaluation_rows)
     set_seed(config.TRAIN_SEED)
 

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo3-244c36274096",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "evaluation",
+  "source_image": "evaluation/strukindo3.jpeg",
+  "source_sha256": "244c36274096256b25837476e4fb73ac413650aa28ede8e6f14e7dd13d3f1f9b",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "1 1LnA1aSCC PRiE1aT&Mu\nEDUvG n1EMaRA 1fZC*1aRET IumaraD\njDULEvAFC PANT&1 ivDw i<AFJk\nIgkasta utara lieshe\n!FwP B1 337 993 G-DS2.00D\nFRESH: UTAN KAYU\nJL.UTAN KAYU 24A, KEL UTAN KAYU UTARA\nKEC MATRAMAN,K0TA.:JAKARTA TIMUR, 13120\n04.10,24-13:21/3.0:19/T004-14315/RIDWA/06\nNO: ORDER POINT COFFEE : CO8\nP/C:BISCOFF MLKCHESE 1 27000 27,000\nHARGA JUAL :: 27,000\nTOTAL : 27,000\nTUNAI : : 27,000\nPJK RST.: DPP= 24;545 PJK=2,455\nP/C..BISCOFF MLKCHESE - (NORMAL)\nL'AYANAN.KONSUMEN OHO\nMS!WA08111500.280TELP 1500280\nKONTAK@INDOMARET.CO.ID PELT\nBELANJA LEBIH MUDAH DI uS r\nKLIKINDOMARET 0\nGRATIS ONGKIR.1 JAM SAMPAI",
+    "text": "1 1LnA1aSCC PRiE1aT&Mu\nEDUvG n1EMaRA 1fZC*1aRET IumaraD\njDULEvAFC PANT&1 ivDw i<AFJk\nIgkasta utara lieshe\n!FwP B1 337 993 G-DS2.00D\nFRESH: UTAN KAYU\nJL.UTAN KAYU 24A, KEL UTAN KAYU UTARA\nKEC MATRAMAN,K0TA.:JAKARTA TIMUR, 13120\n04.10,24-13:21/3.0:19/T004-14315/RIDWA/06\nNO: ORDER POINT COFFEE : CO8\nP/C:BISCOFF MLKCHESE 1 27000 27,000\nHARGA JUAL :: 27,000\nTOTAL : 27,000\nTUNAI : : 27,000\nPJK RST.: DPP= 24;545 PJK=2,455\nP/C..BISCOFF MLKCHESE - (NORMAL)\nL'AYANAN.KONSUMEN OHO\nMS!WA08111500.280TELP 1500280\nKONTAK@INDOMARET.CO.ID PELT\nBELANJA LEBIH MUDAH DI uS r\nKLIKINDOMARET 0\nGRATIS ONGKIR.1 JAM SAMPAI",
+    "model_text": "1 1LnA1aSCC PRiE1aT&Mu\nEDUvG n1EMaRA 1fZC*1aRET IumaraD\n!FwP B1 337 993 G-DS2.00D\n04.10,24-13:21/3.0:19/T004-14315/RIDWA/06\nP/C:BISCOFF MLKCHESE 1 27000 27,000\nHARGA JUAL :: 27,000\nTOTAL : 27,000\nTUNAI : : 27,000\nPJK RST.: DPP= 24;545 PJK=2,455",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 1,
+      "scores": [
+        87.2291,
+        101.3279
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "Indomaret Fresh Utan Kayu",
+    "receipt_number": null,
+    "date": "2024-10-04",
+    "items": [
+      {
+        "item_name": "P/C BISCOFF MLKCHESE",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 27000,
+        "line_total": 27000
+      }
+    ],
+    "subtotal": 27000,
+    "discount": null,
+    "tax": 2455,
+    "service_charge": null,
+    "total": 27000,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; pajak Rp2.455 sudah termasuk dalam total."
+  ]
+}

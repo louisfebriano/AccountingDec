@@ -10,7 +10,11 @@ from typing import Any, Mapping
 from pydantic import ValidationError
 
 from . import config
-from .inference import RECEIPT_ADAPTER_NAME, generate_with_adapter
+from .inference import (
+    RECEIPT_ADAPTER_NAME,
+    RECEIPT_GENERATION_STOP_STRINGS,
+    generate_with_adapter,
+)
 from .prompt_utils import RECEIPT_PROMPT_FORMAT, build_receipt_prompt
 from .receipt_schema import RECEIPT_SCHEMA_FIELDS, ReceiptExtractionSchema
 
@@ -25,6 +29,12 @@ class ReceiptAdapterUnavailableError(ReceiptInferenceError):
 
 class ReceiptOutputValidationError(ReceiptInferenceError):
     """Model nota tidak menghasilkan satu JSON sesuai schema."""
+
+    def __init__(self, message: str, raw_output: Any = None) -> None:
+        super().__init__(message)
+        # Output mentah ikut dibawa agar evaluator dapat mencatat kegagalan apa
+        # adanya tanpa harus menjalankan ulang generasi.
+        self.raw_output = raw_output if isinstance(raw_output, str) else None
 
 
 class ReceiptGenerationError(ReceiptInferenceError):
@@ -78,15 +88,20 @@ def parse_receipt_model_output(raw_output: str) -> dict[str, Any]:
         payload = json.loads(raw_output.strip())
     except (AttributeError, json.JSONDecodeError) as exc:
         raise ReceiptOutputValidationError(
-            "Soft Prompt Nota tidak menghasilkan JSON valid."
+            "Soft Prompt Nota tidak menghasilkan JSON valid.",
+            raw_output,
         ) from exc
     if not isinstance(payload, Mapping):
-        raise ReceiptOutputValidationError("Output Soft Prompt Nota harus objek JSON.")
+        raise ReceiptOutputValidationError(
+            "Output Soft Prompt Nota harus objek JSON.",
+            raw_output,
+        )
     try:
         validated = ReceiptExtractionSchema.model_validate(payload, strict=True)
     except ValidationError as exc:
         raise ReceiptOutputValidationError(
-            "Schema output Soft Prompt Nota tidak valid."
+            "Schema output Soft Prompt Nota tidak valid.",
+            raw_output,
         ) from exc
     return validated.model_dump()
 
@@ -106,6 +121,7 @@ def extract_receipt_with_llama(
             adapter_name=RECEIPT_ADAPTER_NAME,
             adapter_path=config.RECEIPT_ADAPTER_OUTPUT_DIR,
             max_new_tokens=config.RECEIPT_MAX_NEW_TOKENS,
+            stop_strings=RECEIPT_GENERATION_STOP_STRINGS,
         )
     except ReceiptInferenceError:
         raise

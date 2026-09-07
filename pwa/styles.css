@@ -1739,6 +1739,10 @@ textarea::placeholder {
 }
 
 @media (min-width: 480px) {
+  .weekly-chart {
+    aspect-ratio: 700 / 216;
+  }
+
   .app-shell {
     padding-right: 22px;
     padding-left: 22px;

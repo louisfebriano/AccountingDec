@@ -20,7 +20,8 @@ import {
   describeChartPoint,
   describePeriodInsight,
   renderTransactionChart,
-} from "/chart.js?v=16";
+  CHART_WIDE_MEDIA_QUERY,
+} from "/chart.js?v=18";
 import { filterTransactionsByPeriod } from "/filters.js?v=16";
 import {
   EMPTY_VALUE,
@@ -564,6 +565,12 @@ function renderChart(transactions, bounds) {
   });
   renderChartInsight(bounds, totals);
 }
+
+// Tinggi kanvas chart berbeda di bawah dan di atas breakpoint, jadi viewBox harus
+// digambar ulang saat layar melewatinya (rotasi hp, resize desktop).
+window.matchMedia(CHART_WIDE_MEDIA_QUERY).addEventListener("change", () => {
+  renderFilteredViews();
+});
 
 document.addEventListener("pointerdown", (event) => {
   if (elements.chartTooltip.hidden) return;

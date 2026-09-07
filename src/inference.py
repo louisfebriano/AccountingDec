@@ -37,6 +37,15 @@ UNKNOWN_TRANSACTION_TYPE_ERROR = (
     "atau pengeluaran yang lebih jelas."
 )
 GENERATION_STOP_STRINGS = [".Kalimat:", "\n\n", "\nKalimat", "Kalimat:"]
+# Soft Prompt Nota kadang mengulang penanda prompt setelah objek JSON selesai.
+# JSON satu baris tidak pernah memuat newline mentah, jadi penanda ini aman
+# dipakai sebagai batas berhenti tanpa memotong output yang sah.
+RECEIPT_GENERATION_STOP_STRINGS = [
+    "\nJSON",
+    "\nINSTRUCTION:",
+    "\nREFERENCE_DATE:",
+    "\nOCR_TEXT:",
+]
 
 
 def _extract_general_income(user_input: str, reference_date=None) -> dict:

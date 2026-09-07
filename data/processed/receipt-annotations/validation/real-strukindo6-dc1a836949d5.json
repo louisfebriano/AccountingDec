@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo6-dc1a836949d5",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "validation",
+  "source_image": "validation/strukindo6.jpeg",
+  "source_sha256": "dc1a836949d5b374f978b6144fc9a850c039285cde1901bd34245be29a43e3a7",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "STRUK BELANJA\nO-231211-AGWPQBT\nPenjual\nAriif Yuwono\nPesanan Alamat Pengiriman\n#1 kembangkuning,RT.03 RW.04, desa kembangkuning,\nNama Pembeli kecamatan jatiluhur KEMBANGKUNING JATILUHUR,\nKAB.PURWAKARTA,JAWABARAT,\nAriif Yuwono KEMBANGKUNING, JATILUHUR,KAB.\nPURWAKARTA,JAWABARAT,ID\nTanggal Transaksi\n11-12-2023\nKurir\nKURIRALFAMART\nNAMAPRODUK QTY HARGASATUAN TOTAL HARGA\nDelfi Bar Bar Wafer Rice 1 Rp 2.800 Rp 2.800\nCrispy Chocolate 18g\nGood Day Duet Choco Nut 1 Rp 7.700 Rp 7.700\nInstant Coffee 5x 22g\nGood Day Duet Moca Choco 2 Rp 7.700 Rp7.700\nKopi Instant 5x 22 g\nSUBTOTAL HARGA (x4) Rp.25.900\nOngkos Kirim Rp0\nDiskon Pengiriman -Rp0\nAsuransi Pengiriman Rp0\nSUBTOTAL1 Rp 25.900\nTotal Harga Rp 25.900\nDiskon Transaksi -Rp3.600\nBiaya Kirim Rp0\nDiskon Biaya Kirim -Rp0\nBiaya Layanan Rp 0\nTotal Rp 22.300",
+    "text": "STRUK BELANJA\nO-231211-AGWPQBT\nPenjual\nAriif Yuwono\nPesanan Alamat Pengiriman\n#1 kembangkuning,RT.03 RW.04, desa kembangkuning,\nNama Pembeli kecamatan jatiluhur KEMBANGKUNING JATILUHUR,\nKAB.PURWAKARTA,JAWABARAT,\nAriif Yuwono KEMBANGKUNING, JATILUHUR,KAB.\nPURWAKARTA,JAWABARAT,ID\nTanggal Transaksi\n11-12-2023\nKurir\nKURIRALFAMART\nNAMAPRODUK QTY HARGASATUAN TOTAL HARGA\nDelfi Bar Bar Wafer Rice 1 Rp 2.800 Rp 2.800\nCrispy Chocolate 18g\nGood Day Duet Choco Nut 1 Rp 7.700 Rp 7.700\nInstant Coffee 5x 22g\nGood Day Duet Moca Choco 2 Rp 7.700 Rp 7.700\nKopi Instant 5x 22 g\nSUBTOTAL HARGA (x4) Rp 25.900\nOngkos Kirim Rp0\nDiskon Pengiriman -Rp0\nAsuransi Pengiriman Rp0\nSUBTOTAL1 Rp 25.900\nTOTAL Harga Rp 25.900\nDiskon Transaksi -Rp 3.600\nBiaya Kirim Rp0\nDiskon Biaya Kirim -Rp0\nBiaya Layanan Rp 0\nTOTAL Rp 22.300",
+    "model_text": "STRUK BELANJA\nO-231211-AGWPQBT\nPenjual\nAriif Yuwono\nPesanan Alamat Pengiriman\n#1 kembangkuning,RT.03 RW.04, desa kembangkuning,\nNama Pembeli kecamatan jatiluhur KEMBANGKUNING JATILUHUR,\nKAB.PURWAKARTA,JAWABARAT,\nAriif Yuwono KEMBANGKUNING, JATILUHUR,KAB.\nPURWAKARTA,JAWABARAT,ID\nTanggal Transaksi\n11-12-2023\nKurir\nKURIRALFAMART\nNAMAPRODUK QTY HARGASATUAN TOTAL HARGA\nDelfi Bar Bar Wafer Rice 1 Rp 2.800 Rp 2.800\nCrispy Chocolate 18g\nGood Day Duet Choco Nut 1 Rp 7.700 Rp 7.700\nInstant Coffee 5x 22g\nGood Day Duet Moca Choco 2 Rp 7.700 Rp 7.700\nKopi Instant 5x 22 g\nSUBTOTAL HARGA (x4) Rp 25.900\nOngkos Kirim Rp0\nDiskon Pengiriman -Rp0\nAsuransi Pengiriman Rp0\nSUBTOTAL1 Rp 25.900\nTOTAL Harga Rp 25.900\nDiskon Transaksi -Rp 3.600\nBiaya Kirim Rp0\nDiskon Biaya Kirim -Rp0\nBiaya Layanan Rp 0\nTOTAL Rp 22.300",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 0,
+      "scores": [
+        125.4598,
+        122.1263
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "Ariif Yuwono",
+    "receipt_number": "O-231211-AGWPQBT",
+    "date": "2023-12-11",
+    "items": [
+      {
+        "item_name": "Delfi Bar Bar Wafer Rice Crispy Chocolate 18g",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 2800,
+        "line_total": 2800
+      },
+      {
+        "item_name": "Good Day Duet Choco Nut Instant Coffee 5x22g",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 7700,
+        "line_total": 7700
+      },
+      {
+        "item_name": "Good Day Duet Moca Choco Kopi Instant 5x22g",
+        "quantity": 2,
+        "unit": null,
+        "unit_price": 7700,
+        "line_total": 15400
+      }
+    ],
+    "subtotal": 25900,
+    "discount": 3600,
+    "tax": null,
+    "service_charge": 0,
+    "total": 22300,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; total baris quantity dua dihitung dari quantity dikali harga satuan."
+  ]
+}

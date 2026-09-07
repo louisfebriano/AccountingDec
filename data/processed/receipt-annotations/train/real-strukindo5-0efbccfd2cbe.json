@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo5-0efbccfd2cbe",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "train",
+  "source_image": "train/strukindo5.jpeg",
+  "source_sha256": "0efbccfd2cbec4d364d217352c3581e981d1c404334ff543ed0de8d513c5238e",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "PT LION SUPER INDO\nNPWP 01.781.372.6-046.000\nTanggal Pengukuhan : 06-06-97\nSUPER JL.WOLTER MONGINSIDI\nINDO KEL TLOGOMULYO, KEC PEDURUNGAN\nSEMARANG JAWA TENGAH\nLEBIHSE Telp :\n08-08-2417:49:14 704 05 No00067\nDESKRIPSI HARGA TOTAL\nSOS P/L ORANGE RF 2 10.590 21.180\nHEMAT -2.180\nSOS PENCUCI/P LM5 1 10.590 10.590\nHEMAT -3.090\nDAIA DET.PUTIH1.6 1 31.190 31.190\nHEMAT -5.290\nSO/K ROYALE PNK/S 1 25.590 25.590\nHEMAT -13.900\nSO/K ROYALE STARR 1 25.590 25.590\nHEMAT -13.900\nSOS PENCUCI/P LMS 1 10.590 10.590\nHEMAT -3.090\nSO KLIN PEMUTIH5O 2 5.790 11.580\nSub Total (Termasuk PPN) : 94.860\nPembulatan : 40\nTOTAL : 94.900\nPembayaran Tunai : 100.000\nKEMBALI 5.100\nHemat Produk -41.450\nBKP: 136.310 POT.BKP: 41.450\nDPP: 85.459 NEE : 9.401\nTotal Item : 6\nMember Name : RATNA MINTORA\n** Terima Kasih **\nSARAN ANDA KEPUASAN ANDA\nTELPBEBASPULSA:0800 140 3210\nWHATSAPP:081213137035CALLONLY\nSENIN-JUMAT08:00-17:00WIB\nemail: customerservice@superindo.co.id\nwww.superindo.co.id",
+    "text": "PT LION SUPER INDO\nNPWP 01.781.372.6.046.000\nTanggal Pengukuhan : 06-06-97\nSUPER JL.WOLTER MONGINSIDI\nINDO KEL TLOGOMULYO, KEC PEDURUNGAN\nSEMARANG JAWA TENGAH\nLEBIHSE Telp :\n08-08-2417:49:14 704 05 No00067\nDESKRIPSI HARGA TOTAL\nSOS P/L ORANGE RF 2 10.590 21.180\nHEMAT -2.180\nSOS PENCUCI/P LM5 1 10.590 10.590\nHEMAT -3.090\nDAIA DET.PUTIH1.6 1 31.190 31.190\nHEMAT -5.290\nSO/K ROYALE PNK/S 1 25.590 25.590\nHEMAT -13.900\nSO/K ROYALE STARR 1 25.590 25.590\nHEMAT -13.900\nSOS PENCUCI/P LMS 1 10.590 10.590\nHEMAT -3.090\nSO KLIN PEMUTIH5O 2 5.790 11.580\nSub TOTAL (Termasuk PPN) : 94.860\nPembulatan : 40\nTOTAL : 94.900\nPembayaran Tunai : 100.000\nKEMBALI 5.100\nHemat Produk -41.450\nBKP: 136.310 POT.BKP: 41.450\nDPP: 85.459 NEE : 9.401\nTOTAL Item : 6\nMember Name : RATNA MINTORA\n** Terima Kasih **\nSARAN ANDA KEPUASAN ANDA\nTELPBEBASPULSA:0800 140 3210\nWHATSAPP:081213137035CALLONLY\nSENIN-JUMAT08:00-17:00WIB\nemail: customerservice@superindo.co.id\nwww.superindo.co.id",
+    "model_text": "PT LION SUPER INDO\nTanggal Pengukuhan : 06-06-97\n08-08-2417:49:14 704 05 No00067\nDESKRIPSI HARGA TOTAL\nSOS P/L ORANGE RF 2 10.590 21.180\nSOS PENCUCI/P LM5 1 10.590 10.590\nDAIA DET.PUTIH1.6 1 31.190 31.190\nSO/K ROYALE PNK/S 1 25.590 25.590\nSO/K ROYALE STARR 1 25.590 25.590\nSOS PENCUCI/P LMS 1 10.590 10.590\nSO KLIN PEMUTIH5O 2 5.790 11.580\nSub TOTAL (Termasuk PPN) : 94.860\nTOTAL : 94.900\nPembayaran Tunai : 100.000\nKEMBALI 5.100\nBKP: 136.310 POT.BKP: 41.450\nDPP: 85.459 NEE : 9.401\nTOTAL Item : 6\nTELPBEBASPULSA:0800 140 3210",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 0,
+      "scores": [
+        174.5025,
+        118.8473
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "PT LION SUPER INDO",
+    "receipt_number": "00067",
+    "date": "2024-08-08",
+    "items": [
+      {
+        "item_name": "SOS P/L ORANGE RF",
+        "quantity": 2,
+        "unit": null,
+        "unit_price": 10590,
+        "line_total": 21180
+      },
+      {
+        "item_name": "SOS PENCUCI/P LM5",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 10590,
+        "line_total": 10590
+      },
+      {
+        "item_name": "DAIA DET.PUTIH1.6",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 31190,
+        "line_total": 31190
+      },
+      {
+        "item_name": "SO/K ROYALE PNK/S",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 25590,
+        "line_total": 25590
+      },
+      {
+        "item_name": "SO/K ROYALE STARR",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 25590,
+        "line_total": 25590
+      },
+      {
+        "item_name": "SOS PENCUCI/P LMS",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 10590,
+        "line_total": 10590
+      },
+      {
+        "item_name": "SO KLIN PEMUTIH5O",
+        "quantity": 2,
+        "unit": null,
+        "unit_price": 5790,
+        "line_total": 11580
+      }
+    ],
+    "subtotal": 94860,
+    "discount": 41450,
+    "tax": 9401,
+    "service_charge": null,
+    "total": 94900,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; tanggal pengukuhan perusahaan tidak digunakan sebagai tanggal transaksi.",
+    "Dua baris produk SOS PENCUCI/P LM5 dipertahankan sesuai baris yang tercetak."
+  ]
+}

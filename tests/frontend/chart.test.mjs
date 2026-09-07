@@ -8,6 +8,8 @@ import {
   describePeriodInsight,
   getLastSevenDateKeys,
   renderTransactionChart,
+  CHART_COMPACT_HEIGHT,
+  CHART_WIDE_HEIGHT,
 } from "../../pwa/chart.js";
 import {
   createManualTransaction,
@@ -206,7 +208,7 @@ test("grafik panjang tetap memakai lebar responsif tanpa min-width horizontal", 
     }));
     renderTransactionChart(svg, points);
 
-    assert.equal(svg.attributes.get("viewBox"), "0 0 700 270");
+    assert.equal(svg.attributes.get("viewBox"), "0 0 700 216");
     assert.equal(svg.style.minWidth, undefined);
     const axisLabels = svg.children.filter(
       (element) => element.attributes.get("class") === "chart-axis-label",
@@ -214,6 +216,34 @@ test("grafik panjang tetap memakai lebar responsif tanpa min-width horizontal", 
     assert.ok(axisLabels.length <= 15);
   } finally {
     globalThis.document = previousDocument;
+  }
+});
+
+test("kanvas chart tetap tinggi di layar hp dan memendek di layar lebar", () => {
+  const previousDocument = globalThis.document;
+  const previousMatchMedia = globalThis.matchMedia;
+  globalThis.document = {
+    createElementNS: (_namespace, name) => new FakeSvgElement(name),
+  };
+  const points = [
+    { date: "2026-08-01", axisLabel: "1/8", income: 1000, expense: 500 },
+    { date: "2026-08-02", axisLabel: "2/8", income: 2000, expense: 900 },
+  ];
+  try {
+    globalThis.matchMedia = () => ({ matches: false });
+    const compact = new FakeSvgElement("svg");
+    renderTransactionChart(compact, points);
+    assert.equal(compact.attributes.get("viewBox"), `0 0 700 ${CHART_COMPACT_HEIGHT}`);
+
+    globalThis.matchMedia = () => ({ matches: true });
+    const wide = new FakeSvgElement("svg");
+    renderTransactionChart(wide, points);
+    assert.equal(wide.attributes.get("viewBox"), `0 0 700 ${CHART_WIDE_HEIGHT}`);
+
+    assert.equal(CHART_WIDE_HEIGHT, Math.round(CHART_COMPACT_HEIGHT * 0.8));
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.matchMedia = previousMatchMedia;
   }
 });
 

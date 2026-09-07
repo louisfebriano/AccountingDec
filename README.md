@@ -82,6 +82,11 @@ RECEIPT_ADAPTER_OUTPUT_DIR=adapters/soft-prompt-nota
 RECEIPT_TRAIN_DATA_PATH=data/processed/receipt-train.jsonl
 RECEIPT_VALIDATION_DATA_PATH=data/processed/receipt-validation.jsonl
 RECEIPT_EVAL_DATA_PATH=data/processed/receipt-eval.jsonl
+RECEIPT_IMAGE_DATA_DIR=data/processed/image
+RECEIPT_ANNOTATION_DIR=data/processed/receipt-annotations
+RECEIPT_REAL_TRAIN_DATA_PATH=data/processed/receipt-real-train.jsonl
+RECEIPT_REAL_VALIDATION_DATA_PATH=data/processed/receipt-real-validation.jsonl
+RECEIPT_REAL_EVAL_DATA_PATH=data/processed/receipt-real-eval.jsonl
 RECEIPT_SOFT_PROMPT_CONTRACT_VERSION=1
 RECEIPT_LLM_ENABLED=true
 RECEIPT_RULE_FALLBACK_ENABLED=true
@@ -200,6 +205,7 @@ skripsi/
 │   ├── receipt_schema.py   # schema JSON ketat Soft Prompt Nota
 │   ├── receipt_inference.py # inference adapter nota pada base Llama bersama
 │   ├── receipt_validation.py # validasi silang Llama dan parser nota
+│   ├── prepare_receipt_dataset.py # OCR, anotasi, dan JSONL nota nyata
 │   ├── train_receipt.py    # training adapter nota terpisah
 │   ├── evaluate_receipt.py # metrik evaluasi khusus nota
 │   ├── number_utils.py     # normalisasi bilangan lisan Indonesia
@@ -335,6 +341,70 @@ layanan, serta noise OCR ringan pada label. Untuk evaluasi skripsi yang bermakna
 tambahkan nota nyata yang dianotasi manual, simpan `data_origin: "real"`, dan pertahankan
 split berdasarkan `receipt_id`/`template_id`. Laporkan metrik sintetis dan nyata secara
 terpisah.
+
+### Menyiapkan dataset dari gambar nota nyata
+
+Folder input gambar sudah disiapkan pada:
+
+```text
+data/processed/image/
+├── train/
+├── validation/
+└── evaluation/
+```
+
+Letakkan JPEG, PNG, atau WebP pada split yang sesuai. Isi gambar diabaikan Git agar
+foto nota dan data pribadi tidak ikut masuk repository. Gunakan nota berbeda pada tiap
+split. Foto lain dari nota yang sama harus tetap berada pada split yang sama.
+
+Jalankan OCR menggunakan tanggal referensi eksplisit agar persiapan data dapat
+direproduksi:
+
+```powershell
+python -m src.prepare_receipt_dataset ocr --reference-date 2026-08-31
+```
+
+PaddleOCR dimuat secara lazy dan berjalan pada CPU. Perintah tersebut membuat satu
+draft JSON per gambar di `data/processed/receipt-annotations/<split>/`. Draft menyimpan
+checksum gambar, teks OCR mentah, teks OCR bersih, teks ringkas untuk model, diagnosis
+OCR, dan output awal parser. Output awal **bukan ground truth**.
+
+Bandingkan setiap draft dengan gambar asli, perbaiki bagian `output`, lalu ubah:
+
+```json
+"annotation_status": "verified"
+```
+
+Jangan mengubah `receipt_id`, `source_image`, atau `source_sha256`. Perintah OCR tidak
+menimpa anotasi yang sudah ada. Opsi `--overwrite` tersedia, tetapi juga akan menghapus
+koreksi manual pada draft tersebut.
+
+Setelah anotasi selesai, kompilasi dataset nyata:
+
+```powershell
+python -m src.prepare_receipt_dataset build
+```
+
+Compiler hanya memasukkan anotasi `verified`, memvalidasi schema target, memeriksa
+checksum gambar, dan menolak kebocoran `receipt_id`, teks OCR, atau `template_id` antar
+split. Hasilnya ditulis terpisah agar dataset sintetis tidak ditimpa:
+
+- `data/processed/receipt-real-train.jsonl`
+- `data/processed/receipt-real-validation.jsonl`
+- `data/processed/receipt-real-eval.jsonl`
+
+File JSONL tersebut dibuat ulang dari anotasi; lakukan koreksi hanya pada file anotasi.
+Saat tersedia, ketiga dataset nyata otomatis ditambahkan ke dataset utama oleh
+`python -m src.train_receipt`. Untuk melaporkan hasil data nyata secara terpisah,
+jalankan:
+
+```powershell
+python -m src.evaluate_receipt --data data/processed/receipt-real-eval.jsonl
+```
+
+Tahap ini tidak melakukan training PaddleOCR dan tidak memberikan piksel gambar kepada
+Llama. Metode pembelajarannya tetap: gambar menjadi teks melalui OCR, kemudian Soft
+Prompt Nota mempelajari pemetaan teks OCR menjadi JSON terstruktur.
 
 ### Training dan evaluasi nota
 

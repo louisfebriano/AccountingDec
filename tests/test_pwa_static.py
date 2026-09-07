@@ -40,7 +40,7 @@ class PwaStaticTests(unittest.TestCase):
         self.assertEqual(manifest.status_code, 200)
         self.assertEqual(manifest.json()["display"], "standalone")
         self.assertEqual(worker.status_code, 200)
-        self.assertIn("catatkas-shell-v21", worker.text)
+        self.assertIn("catatkas-shell-v23", worker.text)
         self.assertEqual(styles.status_code, 200)
         self.assertIn("--primary-color: #03bfb5", styles.text)
         self.assertIn("--secondary-color: #018076", styles.text)

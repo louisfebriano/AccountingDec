@@ -174,6 +174,28 @@ RECEIPT_EVAL_DATA_PATH = os.getenv(
     "RECEIPT_EVAL_DATA_PATH",
     "data/processed/receipt-eval.jsonl",
 )
+# Foto asli hanya dipakai saat persiapan data. Hasil OCR/anotasi dikompilasi ke
+# dataset nyata terpisah agar dataset sintetis yang sudah ada tidak ditimpa.
+RECEIPT_IMAGE_DATA_DIR = os.getenv(
+    "RECEIPT_IMAGE_DATA_DIR",
+    "data/processed/image",
+)
+RECEIPT_ANNOTATION_DIR = os.getenv(
+    "RECEIPT_ANNOTATION_DIR",
+    "data/processed/receipt-annotations",
+)
+RECEIPT_REAL_TRAIN_DATA_PATH = os.getenv(
+    "RECEIPT_REAL_TRAIN_DATA_PATH",
+    "data/processed/receipt-real-train.jsonl",
+)
+RECEIPT_REAL_VALIDATION_DATA_PATH = os.getenv(
+    "RECEIPT_REAL_VALIDATION_DATA_PATH",
+    "data/processed/receipt-real-validation.jsonl",
+)
+RECEIPT_REAL_EVAL_DATA_PATH = os.getenv(
+    "RECEIPT_REAL_EVAL_DATA_PATH",
+    "data/processed/receipt-real-eval.jsonl",
+)
 RECEIPT_SOFT_PROMPT_CONTRACT_VERSION = int(
     os.getenv("RECEIPT_SOFT_PROMPT_CONTRACT_VERSION", "1")
 )

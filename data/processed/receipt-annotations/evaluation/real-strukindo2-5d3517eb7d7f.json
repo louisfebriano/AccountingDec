@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "receipt_id": "real-strukindo2-5d3517eb7d7f",
+  "template_id": null,
+  "data_origin": "real",
+  "split": "evaluation",
+  "source_image": "evaluation/strukindo2.jpeg",
+  "source_sha256": "5d3517eb7d7f831ca7d02e1bbd8c930bcf8f3463e7825d55c640b1336737e726",
+  "reference_date": "2026-08-31",
+  "ocr": {
+    "engine": "PaddleOCR",
+    "language": "id",
+    "raw_text": "JLANCOLI9-10.ANCOL PEEMLUMAROURRISMAIAMA\nNPWP.01.3379946-092000 BARAT-JAKARTAUTARA Indamaret\nJL.BESI JANGKANG KM.1.5 RT 01 RW 13 MINDI BESIJANGKANG KM.1.5/00402744464894\nSUKOHARJONGAGLIK,SLEMAN,SLEMAN5558\n16.06.18-17:08 2.1.27 301135/RATIH/01\nABCORANGE525ML 1 13500 13,500\nI/F BISC.WNDRLND300 1 20900 20,900\nLEXUS SANDW COKL 190 1 26800 26,800\nLUWAKWHTORGL20X20 1 25400 25,400\n0REOCHO&VAN2X137 1 19800 19,800\nTONG TJI JASM T/A.25 1 9300 9,300\nKOPIK078C240ML 2 5500 11,000\nFRSTEA TEH MADU 350 1 3950 3.950\nSOVIAM/GORENG 2L 1 26950 26,950\nCANCEL 12695026,950\nHARGAJUAL: 130,650\nVOUCHER ABCSQUASH ORANGE: 3,600\nVOUCHER TONG TJI TEA INDONESIA : VOUCHER INDOFOODWONDERLAND10,000 (5003",
+    "text": "JLANCOLI9-10.ANCOL PEEMLUMAROURRISMAIAMA\nNPWP.01.3379946-092000 BARAT-JAKARTAUTARA Indamaret\nJL.BESI JANGKANG KM.1.5 RT 01 RW 13 MINDI BESIJANGKANG KM.1.5/00402744464894\nSUKOHARJONGAGLIK,SLEMAN,SLEMAN5558\n16.06.18-17:08 2.1.27 301135/RATIH/01\nABCORANGE525ML 1 13500 13,500\nI/F BISC.WNDRLND300 1 20900 20,900\nLEXUS SANDW COKL 190 1 26800 26,800\nLUWAKWHTORGL20X20 1 25400 25,400\n0REOCHO&VAN2X137 1 19800 19,800\nTONG TJI JASM T/A.25 1 9300 9,300\nKOPIK078C240ML 2 5500 11,000\nFRSTEA TEH MADU 350 1 3950 3.950\nSOVIAM/GORENG 2L 1 26950 26,950\nCANCEL 12695026,950\nHARGAJUAL: 130,650\nVOUCHER ABCSQUASH ORANGE: 3,600\nVOUCHER TONG TJI TEA INDONESIA : VOUCHER INDOFOODWONDERLAND10,000 (5003",
+    "model_text": "JLANCOLI9-10.ANCOL PEEMLUMAROURRISMAIAMA\nNPWP.01.3379946-092000 BARAT-JAKARTAUTARA Indamaret\nJL.BESI JANGKANG KM.1.5 RT 01 RW 13 MINDI BESIJANGKANG KM.1.5/00402744464894\nSUKOHARJONGAGLIK,SLEMAN,SLEMAN5558\n16.06.18-17:08 2.1.27 301135/RATIH/01\nABCORANGE525ML 1 13500 13,500\nI/F BISC.WNDRLND300 1 20900 20,900\nLEXUS SANDW COKL 190 1 26800 26,800\nLUWAKWHTORGL20X20 1 25400 25,400\n0REOCHO&VAN2X137 1 19800 19,800\nTONG TJI JASM T/A.25 1 9300 9,300\nKOPIK078C240ML 2 5500 11,000\nFRSTEA TEH MADU 350 1 3950 3.950\nSOVIAM/GORENG 2L 1 26950 26,950\nCANCEL 12695026,950\nHARGAJUAL: 130,650\nVOUCHER ABCSQUASH ORANGE: 3,600\nVOUCHER TONG TJI TEA INDONESIA : VOUCHER INDOFOODWONDERLAND10,000 (5003",
+    "diagnostics": {
+      "passes": 2,
+      "selected_pass": 0,
+      "scores": [
+        171.7289,
+        116.2067
+      ]
+    }
+  },
+  "output": {
+    "merchant_name": "Indomaret Besi Jangkang",
+    "receipt_number": null,
+    "date": "2018-06-16",
+    "items": [
+      {
+        "item_name": "ABC ORANGE 525ML",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 13500,
+        "line_total": 13500
+      },
+      {
+        "item_name": "I/F BISC. WNDRLND 300",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 20900,
+        "line_total": 20900
+      },
+      {
+        "item_name": "LEXUS SANDW COKL 190",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 26800,
+        "line_total": 26800
+      },
+      {
+        "item_name": "LUWAK WHT ORGL 20X20",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 25400,
+        "line_total": 25400
+      },
+      {
+        "item_name": "OREO CHO & VAN 2X137",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 19800,
+        "line_total": 19800
+      },
+      {
+        "item_name": "TONG TJI JASM T/A.25",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 9300,
+        "line_total": 9300
+      },
+      {
+        "item_name": "KOPIKO 78C 240ML",
+        "quantity": 2,
+        "unit": null,
+        "unit_price": 5500,
+        "line_total": 11000
+      },
+      {
+        "item_name": "FRSTEA TEH MADU 350",
+        "quantity": 1,
+        "unit": null,
+        "unit_price": 3950,
+        "line_total": 3950
+      }
+    ],
+    "subtotal": 130650,
+    "discount": null,
+    "tax": null,
+    "service_charge": null,
+    "total": null,
+    "transaction_type": "expense"
+  },
+  "annotation_status": "verified",
+  "annotation_notes": [
+    "Diverifikasi manual berdasarkan gambar asli; item minyak goreng yang dibatalkan tidak dimasukkan.",
+    "Bagian total akhir terpotong pada foto sehingga total dipertahankan null."
+  ]
+}

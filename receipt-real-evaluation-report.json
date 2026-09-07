@@ -1,0 +1,27 @@
+{
+  "examples": 4,
+  "json_validity_rate": 0.25,
+  "field_level_accuracy": 0.05555555555555555,
+  "merchant_name_accuracy": 0.0,
+  "date_accuracy": 0.0,
+  "total_price_accuracy": 0.0,
+  "scalar_field_accuracy": {
+    "merchant_name": 0.0,
+    "receipt_number": 0.0,
+    "date": 0.0,
+    "subtotal": 0.0,
+    "discount": 0.25,
+    "tax": 0.0,
+    "service_charge": 0.0,
+    "total": 0.0,
+    "transaction_type": 0.25
+  },
+  "item_name_precision": 0.0,
+  "item_name_recall": 0.0,
+  "item_name_f1": 0.0,
+  "quantity_accuracy": 0.0,
+  "unit_accuracy": 0.0,
+  "unit_price_accuracy": 0.0,
+  "line_total_accuracy": 0.0,
+  "exact_transaction_match": 0.0
+}
