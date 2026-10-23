@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "generated_at_utc": "2026-08-25T14:30:19.359587+00:00",
+  "generated_at_utc": "2026-09-07T15:59:21.958250+00:00",
   "model": "meta-llama/Llama-3.2-3B-Instruct",
   "adapter_path": "adapters/soft-prompt-transaksi",
   "dataset": {
@@ -99,7 +99,7 @@
       {
         "index": 1,
         "input": "Barusan beli beras pandan wangi 5kg total 78rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"transaction_text\": \"Barusan beli beras pandan wangi 5kg total 78rb\"}",
         "error": null
       },
       {
@@ -111,7 +111,7 @@
       {
         "index": 3,
         "input": "hari ini beli beras 25kg 275rb",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
@@ -183,13 +183,13 @@
       {
         "index": 15,
         "input": "beli gas elpiji 3kg 3tbg 60rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 180000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 180000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 16,
         "input": "beli mentega 4bks 60rebu buat kue",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 240, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 240,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
@@ -219,7 +219,7 @@
       {
         "index": 21,
         "input": "beli telur 45500",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 45500,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 45500.0, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
         "error": null
       },
       {
@@ -243,13 +243,13 @@
       {
         "index": 25,
         "input": "beli plastik kemasan 1rim 45rb",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 45000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 45000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 26,
         "input": "beli susu uht 12pcs 84rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 84000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 84000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"transaction_text\": \"beli susu uht 12pcs 84rb\"}",
         "error": null
       },
       {
@@ -273,19 +273,19 @@
       {
         "index": 30,
         "input": "beli gula 500gram 8rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 80000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 80000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 31,
         "input": "beli santan 200ml 3rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 300000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 300000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 32,
         "input": "beli kecap isi 24 botol 1dus totalnya 130rb yaa",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 130000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 130000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
         "error": null
       },
       {
@@ -315,7 +315,7 @@
       {
         "index": 37,
         "input": "restok kopi sachet 5box 45rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 225000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 45000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
         "error": null
       },
       {
@@ -333,19 +333,19 @@
       {
         "index": 40,
         "input": "Barusan jual 8 porsi nasi goreng total 160rb",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 160000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 160000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 41,
         "input": "Kemarin 12 gelas es teh terjual total 60rb",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 60000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 60000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 42,
         "input": "hari ini pelanggan membeli 3 botol jus mangga 45rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 45000000000, \"date\": \"2026-08-25\", \"transaction_type\": \"income\", \"reference_date\": \"2026-08-24\"}",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 45000000000, \"date\": \"2026-08-24\", \"transaction_type\": \"income\", \"reference_date\": \"2026-08-24\"}",
         "error": null
       },
       {
@@ -357,19 +357,19 @@
       {
         "index": 44,
         "input": "Tanggal 20 Agustus jual 4 kotak bolu total 120k",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 120000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 120000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
         "index": 45,
         "input": "2 hari lalu terjual 6 bungkus keripik pisang 54rb",
-        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 54000000000,\n  \"date\": \"2026-08-22\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"",
+        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 54000000000, \"date\": \"2026-08-22\", \"transaction_type\": \"income\"}",
         "error": null
       },
       {
         "index": 46,
         "input": "minggu lalu jual 10 porsi bakmi 200rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 200000, \"date\": \"2026-08-23\", \"transaction_type\": \"income\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 200000,\n  \"date\": \"2026-08-23\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"\n}",
         "error": null
       },
       {
@@ -381,7 +381,7 @@
       {
         "index": 48,
         "input": "kemarin pemasukan warung 500000",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 500000.0, \"date\": \"2026-08-25\", \"transaction_type\": \"income\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 500000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"income\",\n  \"reference_date\": \"2026-08-24\"",
         "error": null
       },
       {
@@ -393,7 +393,7 @@
       {
         "index": 50,
         "input": "terjual 2 dus air mineral 96rb",
-        "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 96000000, \"date\": \"2026-08-24\", \"transaction_type\": \"income\"}",
+        "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 96000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"income\"\n}",
         "error": null
       },
       {
@@ -503,7 +503,7 @@
       {
         "index": 16,
         "input": "beli mentega 4bks 60rebu buat kue",
-        "raw_output": " {\"item_name\": \"Mentega\", \"quantity\": 4.0, \"unit\": \"batas\", \"total_price\": 60000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+        "raw_output": " {\"item_name\": \"Mentega\", \"quantity\": 4.0, \"unit\": \"bks\", \"total_price\": 60000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
         "error": null
       },
       {
@@ -533,7 +533,7 @@
       {
         "index": 21,
         "input": "beli telur 45500",
-        "raw_output": " {\"item_name\": \"Telur\", \"quantity\": 2.0, \"unit\": \"dasi\", \"total_price\": 45500, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+        "raw_output": " {\"item_name\": \"Telur\", \"quantity\": 2.0, \"unit\": \"kaypem\", \"total_price\": 45500, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
         "error": null
       },
       {
@@ -593,7 +593,7 @@
       {
         "index": 31,
         "input": "beli santan 200ml 3rb",
-        "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+        "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
         "error": null
       },
       {
@@ -726,27 +726,27 @@
   },
   "configurations": {
     "llama": {
-      "json_validity_rate": 90.38461538461539,
-      "precision": 66.66666666666666,
-      "recall": 31.22923588039867,
-      "f1_score": 42.5339366515837,
-      "overall_field_accuracy": 33.65384615384615,
+      "json_validity_rate": 96.15384615384616,
+      "precision": 69.33333333333334,
+      "recall": 34.55149501661129,
+      "f1_score": 46.11973392461198,
+      "overall_field_accuracy": 35.8974358974359,
       "field_accuracy": {
-        "item_name": 3.8461538461538463,
-        "quantity": 7.6923076923076925,
-        "unit": 9.615384615384617,
-        "total_price": 19.230769230769234,
-        "date": 75.0,
-        "transaction_type": 86.53846153846155
+        "item_name": 1.9230769230769231,
+        "quantity": 5.769230769230769,
+        "unit": 7.6923076923076925,
+        "total_price": 21.153846153846153,
+        "date": 86.53846153846155,
+        "transaction_type": 92.3076923076923
       },
       "counts": {
         "total_examples": 52,
-        "valid_json": 47,
-        "invalid_json": 5,
-        "tp": 94,
-        "fp": 47,
-        "fn": 207,
-        "correct_fields": 105,
+        "valid_json": 50,
+        "invalid_json": 2,
+        "tp": 104,
+        "fp": 46,
+        "fn": 197,
+        "correct_fields": 112,
         "total_fields": 312
       },
       "error_examples": [
@@ -765,12 +765,12 @@
             "item_name": null,
             "quantity": null,
             "unit": null,
-            "total_price": 78000000000,
+            "total_price": 78000000,
             "date": "2026-08-24",
             "transaction_type": "expense",
-            "reference_date": "2026-08-24"
+            "transaction_text": "Barusan beli beras pandan wangi 5kg total 78rb"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"transaction_text\": \"Barusan beli beras pandan wangi 5kg total 78rb\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -825,19 +825,18 @@
             "quantity": null,
             "unit": null,
             "total_price": 275000000,
-            "date": "2026-08-25",
+            "date": "2026-08-24",
             "transaction_type": "expense",
             "reference_date": "2026-08-24"
           },
-          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
             "item_name",
             "quantity",
             "unit",
-            "total_price",
-            "date"
+            "total_price"
           ]
         },
         {
@@ -1190,7 +1189,7 @@
             "transaction_type": "expense",
             "reference_date": "2026-08-24"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 180000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 180000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1220,7 +1219,7 @@
             "transaction_type": "expense",
             "reference_date": "2026-08-24"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 240, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 240,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1492,12 +1491,12 @@
           "prediction": {
             "item_name": "Mentega",
             "quantity": 4.0,
-            "unit": "batas",
+            "unit": "bks",
             "total_price": 60000,
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": " {\"item_name\": \"Mentega\", \"quantity\": 4.0, \"unit\": \"batas\", \"total_price\": 60000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+          "raw_output": " {\"item_name\": \"Mentega\", \"quantity\": 4.0, \"unit\": \"bks\", \"total_price\": 60000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1597,12 +1596,12 @@
           "prediction": {
             "item_name": "Telur",
             "quantity": 2.0,
-            "unit": "dasi",
+            "unit": "kaypem",
             "total_price": 45500,
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": " {\"item_name\": \"Telur\", \"quantity\": 2.0, \"unit\": \"dasi\", \"total_price\": 45500, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+          "raw_output": " {\"item_name\": \"Telur\", \"quantity\": 2.0, \"unit\": \"kaypem\", \"total_price\": 45500, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1706,11 +1705,11 @@
             "item_name": "Santan 200ml",
             "quantity": 3.0,
             "unit": "tabungan",
-            "total_price": 300000,
+            "total_price": 300,
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+          "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1854,27 +1853,27 @@
       ]
     },
     "llama_postprocessing": {
-      "json_validity_rate": 90.38461538461539,
-      "precision": 99.13419913419914,
-      "recall": 76.0797342192691,
-      "f1_score": 86.09022556390977,
-      "overall_field_accuracy": 76.92307692307693,
+      "json_validity_rate": 96.15384615384616,
+      "precision": 100.0,
+      "recall": 83.05647840531562,
+      "f1_score": 90.74410163339383,
+      "overall_field_accuracy": 82.6923076923077,
       "field_accuracy": {
-        "item_name": 13.461538461538462,
-        "quantity": 90.38461538461539,
-        "unit": 90.38461538461539,
-        "total_price": 90.38461538461539,
-        "date": 86.53846153846155,
-        "transaction_type": 90.38461538461539
+        "item_name": 15.384615384615385,
+        "quantity": 96.15384615384616,
+        "unit": 96.15384615384616,
+        "total_price": 96.15384615384616,
+        "date": 96.15384615384616,
+        "transaction_type": 96.15384615384616
       },
       "counts": {
         "total_examples": 52,
-        "valid_json": 47,
-        "invalid_json": 5,
-        "tp": 229,
-        "fp": 2,
-        "fn": 72,
-        "correct_fields": 240,
+        "valid_json": 50,
+        "invalid_json": 2,
+        "tp": 250,
+        "fp": 0,
+        "fn": 51,
+        "correct_fields": 258,
         "total_fields": 312
       },
       "error_examples": [
@@ -1897,7 +1896,7 @@
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 78000000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"transaction_text\": \"Barusan beli beras pandan wangi 5kg total 78rb\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -1949,7 +1948,7 @@
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-25\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 275000000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -2261,7 +2260,7 @@
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 180000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 180000,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -2287,7 +2286,7 @@
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": "{\"item_name\": null, \"quantity\": null, \"unit\": null, \"total_price\": 240, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\", \"reference_date\": \"2026-08-24\"}",
+          "raw_output": "{\n  \"item_name\": null,\n  \"quantity\": null,\n  \"unit\": null,\n  \"total_price\": 240,\n  \"date\": \"2026-08-24\",\n  \"transaction_type\": \"expense\",\n  \"reference_date\": \"2026-08-24\"\n}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [
@@ -2470,7 +2469,7 @@
             "date": "2026-08-24",
             "transaction_type": "expense"
           },
-          "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300000, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
+          "raw_output": " {\"item_name\": \"Santan 200ml\", \"quantity\": 3.0, \"unit\": \"tabungan\", \"total_price\": 300, \"date\": \"2026-08-24\", \"transaction_type\": \"expense\"}",
           "valid_json": true,
           "error": null,
           "wrong_fields": [

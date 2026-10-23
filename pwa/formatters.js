@@ -1,3 +1,5 @@
+import { categoryPresentation } from "./categories.js?v=3";
+
 export const EMPTY_VALUE = "—";
 
 export const TYPE_LABELS = {
@@ -45,6 +47,7 @@ export function presentTransaction(record, localDate) {
     item: formatOptional(record.item_name),
     quantity: formatOptional(record.quantity),
     unit: formatOptional(record.unit),
+    category: categoryPresentation(record.category),
     source: record.source === "voice"
       ? "Suara"
       : record.source === "manual"

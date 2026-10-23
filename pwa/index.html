@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=20">
+    <link rel="stylesheet" href="/styles.css?v=24">
   </head>
   <body data-auth-state="loading">
     <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
@@ -260,6 +260,7 @@
               <dl class="result-grid">
                 <div><dt>Nominal</dt><dd id="result-price">—</dd></div>
                 <div><dt>Tanggal</dt><dd id="result-date">—</dd></div>
+                <div><dt>Kategori</dt><dd id="result-category">—</dd></div>
                 <div><dt>Nama barang</dt><dd id="result-item">—</dd></div>
                 <div><dt>Jumlah</dt><dd id="result-quantity">—</dd></div>
                 <div><dt>Satuan</dt><dd id="result-unit">—</dd></div>
@@ -296,6 +297,12 @@
                     <option value="all">Semua</option>
                   </select>
                 </div>
+                <div class="form-field" id="category-filter-field">
+                  <label for="category-filter">Kategori</label>
+                  <select id="category-filter">
+                    <option value="">Semua kategori</option>
+                  </select>
+                </div>
                 <div class="form-field period-field" id="week-filter-field" hidden>
                   <label for="week-filter-date">Tanggal dalam minggu</label>
                   <input id="week-filter-date" type="date">
@@ -322,6 +329,13 @@
               <p class="active-period" id="active-period">Menampilkan bulan berjalan.</p>
               <p class="field-error" id="filter-error" role="alert"></p>
             </div>
+            <section class="category-summary" id="category-summary" aria-labelledby="category-summary-title" hidden>
+              <div class="category-summary-heading">
+                <h3 id="category-summary-title">Ringkasan kategori</h3>
+                <span id="category-summary-period">—</span>
+              </div>
+              <ul class="category-summary-list" id="category-summary-list"></ul>
+            </section>
             <div class="empty-state" id="empty-history">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"></path>
@@ -409,6 +423,7 @@
         <div><dt>Jenis</dt><dd id="detail-type">—</dd></div>
         <div><dt>Nominal</dt><dd id="detail-price">—</dd></div>
         <div><dt>Tanggal</dt><dd id="detail-date">—</dd></div>
+        <div><dt>Kategori</dt><dd id="detail-category">—</dd></div>
         <div><dt>Nama barang</dt><dd id="detail-item">—</dd></div>
         <div><dt>Quantity</dt><dd id="detail-quantity">—</dd></div>
         <div><dt>Unit</dt><dd id="detail-unit">—</dd></div>
@@ -526,6 +541,15 @@
             <textarea id="manual-note" maxlength="500" rows="3"></textarea>
           </div>
         </div>
+        <section class="category-confirm-section">
+          <h3>Kategori transaksi</h3>
+          <p class="category-pick-hint">Pilih kategori agar transaksi mudah difilter dan diringkas.</p>
+          <div class="category-pick-grid" id="manual-form-category-grid" role="group" aria-label="Preset kategori UMKM"></div>
+          <div class="form-field">
+            <label for="manual-form-custom-category">Kategori lain <span>(opsional)</span></label>
+            <input id="manual-form-custom-category" type="text" list="category-presets" maxlength="50" autocomplete="off" placeholder="Tulis kategori sendiri, misalnya Gas LPG">
+          </div>
+        </section>
         <p class="field-error" id="manual-form-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="button button-secondary" id="cancel-transaction-form-button" type="button">Batal</button>
@@ -534,12 +558,102 @@
       </form>
     </dialog>
 
+    <dialog class="settings-dialog confirm-dialog" id="transaction-confirm-dialog" aria-labelledby="transaction-confirm-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Konfirmasi sebelum disimpan</p>
+          <h2 id="transaction-confirm-title">Periksa &amp; simpan transaksi</h2>
+        </div>
+        <button class="icon-button" id="close-transaction-confirm-button" type="button" aria-label="Batalkan penyimpanan transaksi">×</button>
+      </div>
+      <form id="transaction-confirm-form">
+        <p class="receipt-privacy-note confirm-source-note" id="transaction-confirm-source" hidden></p>
+        <p class="field-warning" id="transaction-confirm-price-warning" hidden>
+          Nominal tidak terbaca dari input. Isi nominal sebelum transaksi disimpan.
+        </p>
+        <div class="manual-form-grid">
+          <div class="form-field">
+            <label for="transaction-confirm-type">Jenis transaksi</label>
+            <select id="transaction-confirm-type" required>
+              <option value="income">Pemasukan</option>
+              <option value="expense">Pengeluaran</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="transaction-confirm-date">Tanggal</label>
+            <input id="transaction-confirm-date" type="date" required>
+          </div>
+          <div class="form-field manual-price-field">
+            <label for="transaction-confirm-total-price">Nominal</label>
+            <input id="transaction-confirm-total-price" type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" placeholder="250.000" required>
+          </div>
+          <div class="form-field">
+            <label for="transaction-confirm-item-name">Nama barang <span>(opsional)</span></label>
+            <input id="transaction-confirm-item-name" type="text" maxlength="500">
+          </div>
+          <div class="form-field">
+            <label for="transaction-confirm-quantity">Quantity <span>(opsional)</span></label>
+            <input id="transaction-confirm-quantity" type="number" min="0.01" step="any" inputmode="decimal">
+          </div>
+          <div class="form-field">
+            <label for="transaction-confirm-unit">Unit <span>(opsional)</span></label>
+            <input id="transaction-confirm-unit" type="text" maxlength="500" placeholder="porsi, kg, karung">
+          </div>
+          <div class="form-field manual-note-field" id="transaction-confirm-note-field">
+            <label for="transaction-confirm-note">Catatan <span>(opsional)</span></label>
+            <textarea id="transaction-confirm-note" maxlength="500" rows="3"></textarea>
+          </div>
+        </div>
+        <section class="category-confirm-section">
+          <h3>Kategori transaksi</h3>
+          <p class="category-pick-hint">Pilih salah satu kategori agar transaksi mudah difilter dan diringkas.</p>
+          <div class="category-pick-grid" id="transaction-confirm-category-grid" role="group" aria-label="Preset kategori UMKM"></div>
+          <div class="form-field">
+            <label for="transaction-confirm-custom-category">Kategori lain <span>(opsional)</span></label>
+            <input id="transaction-confirm-custom-category" type="text" list="category-presets" maxlength="50" autocomplete="off" placeholder="Tulis kategori sendiri, misalnya Gas LPG">
+          </div>
+        </section>
+        <p class="field-error" id="transaction-confirm-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="transaction-confirm-cancel-button" type="button">Batal</button>
+          <button class="button button-secondary" id="transaction-confirm-skip-button" type="button">Lewati kategori</button>
+          <button class="button button-primary" type="submit">
+            <span class="button-label">Simpan transaksi</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog category-pick-dialog" id="category-pick-dialog" aria-labelledby="category-pick-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Kategori transaksi</p>
+          <h2 id="category-pick-title">Pilih kategori</h2>
+        </div>
+      </div>
+      <p class="category-pick-summary" id="category-pick-summary">Transaksi baru</p>
+      <div class="category-pick-grid" id="category-pick-grid" role="group" aria-label="Preset kategori UMKM"></div>
+      <div class="form-field">
+        <label for="category-pick-custom">Kategori lain <span>(opsional)</span></label>
+        <input id="category-pick-custom" type="text" list="category-presets" maxlength="50" autocomplete="off" placeholder="Tulis kategori sendiri, misalnya Gas LPG">
+      </div>
+      <p class="category-pick-hint">Pilih salah satu kategori agar transaksi mudah difilter dan diringkas.</p>
+      <p class="field-error" id="category-pick-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="category-pick-skip" type="button">Lewati</button>
+        <button class="button button-primary" id="category-pick-confirm" type="button">Simpan transaksi</button>
+      </div>
+    </dialog>
+
     <aside class="action-popup" id="action-popup" role="status" aria-live="polite" aria-atomic="true" hidden>
       <span class="action-popup-icon" id="action-popup-icon" aria-hidden="true">✓</span>
       <span class="action-popup-message" id="action-popup-message"></span>
       <button class="action-popup-close" id="action-popup-close" type="button" aria-label="Tutup notifikasi">×</button>
     </aside>
 
-    <script type="module" src="/app.js?v=22"></script>
+    <datalist id="category-presets"></datalist>
+
+    <script type="module" src="/app.js?v=26"></script>
   </body>
 </html>

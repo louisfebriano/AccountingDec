@@ -54,7 +54,7 @@ class TrainingDataTests(unittest.TestCase):
 
         self.assertEqual(rows, [base_row])
 
-    def test_legacy_five_field_target_is_upgraded_to_six_fields(self):
+    def test_null_source_date_is_resolved_against_reference_date(self):
         example = {
             "input": "Kemarin beli beras 2kg 30rb",
             "output": {
@@ -63,6 +63,7 @@ class TrainingDataTests(unittest.TestCase):
                 "unit": "kg",
                 "total_price": 30000,
                 "date": None,
+                "transaction_type": "expense",
             },
         }
 
@@ -72,7 +73,7 @@ class TrainingDataTests(unittest.TestCase):
         self.assertEqual(prepared["output"]["date"], "2026-08-23")
         self.assertEqual(prepared["output"]["transaction_type"], "expense")
 
-    def test_income_target_and_default_date_are_derived_from_input(self):
+    def test_missing_source_date_defaults_to_reference_date(self):
         example = {
             "input": "Jual 3 porsi bakmi total 60rb",
             "output": {
@@ -80,6 +81,7 @@ class TrainingDataTests(unittest.TestCase):
                 "quantity": 3,
                 "unit": "porsi",
                 "total_price": 60000,
+                "transaction_type": "income",
             },
         }
 
@@ -88,30 +90,46 @@ class TrainingDataTests(unittest.TestCase):
         self.assertEqual(prepared["output"]["date"], "2026-08-24")
         self.assertEqual(prepared["output"]["transaction_type"], "income")
 
-    def test_ambiguous_training_input_is_excluded_not_labeled_unknown(self):
+    def test_source_row_without_valid_transaction_type_is_excluded(self):
         valid = {
             "input": "Beli beras 2kg 30rb",
-            "output": {"item_name": "Beras", "total_price": 30000},
+            "output": {
+                "item_name": "Beras",
+                "total_price": 30000,
+                "transaction_type": "expense",
+            },
         }
-        ambiguous = {
+        missing_type = {
             "input": "Beras 2kg 30rb",
             "output": {"item_name": "Beras", "total_price": 30000},
         }
+        unknown_type = {
+            "input": "Beras 2kg 30rb lagi",
+            "output": {
+                "item_name": "Beras",
+                "total_price": 30000,
+                "transaction_type": "unknown",
+            },
+        }
 
         prepared, excluded = prepare_training_rows(
-            [valid, ambiguous],
+            [valid, missing_type, unknown_type],
             REFERENCE_DATE,
         )
 
         self.assertEqual(len(prepared), 1)
-        self.assertEqual(excluded, ["Beras 2kg 30rb"])
-        self.assertNotEqual(prepared[0]["output"]["transaction_type"], "unknown")
+        self.assertEqual(excluded, ["Beras 2kg 30rb", "Beras 2kg 30rb lagi"])
+        self.assertEqual(prepared[0]["output"]["transaction_type"], "expense")
 
     def test_training_rows_rotate_reference_dates_instead_of_memorizing_one(self):
         rows = [
             {
                 "input": f"Beli barang {index} 10rb",
-                "output": {"item_name": f"Barang {index}", "total_price": 10000},
+                "output": {
+                    "item_name": f"Barang {index}",
+                    "total_price": 10000,
+                    "transaction_type": "expense",
+                },
             }
             for index in range(4)
         ]

@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 TransactionSource = Literal["manual", "text", "voice", "receipt"]
 TransactionType = Literal["income", "expense"]
 
+# Batas kolom transactions.category pada Supabase dan payload API.
+CATEGORY_MAX_LENGTH = 50
+
 
 def _clean_optional_text(value: str | None) -> str | None:
     if value is None:
@@ -81,6 +84,7 @@ class TransactionCreate(BaseModel):
     transcript: str | None = Field(default=None, max_length=500)
     normalized_text: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=CATEGORY_MAX_LENGTH)
     reference_date: Date | None = None
     extraction_method: str | None = Field(default=None, max_length=100)
     receipt: ReceiptInput | None = None
@@ -92,6 +96,7 @@ class TransactionCreate(BaseModel):
         "transcript",
         "normalized_text",
         "note",
+        "category",
         "extraction_method",
     )
     @classmethod
@@ -122,8 +127,9 @@ class TransactionUpdate(BaseModel):
     total_price: int | None = Field(default=None, gt=0)
     date: Date | None = None
     note: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=CATEGORY_MAX_LENGTH)
 
-    @field_validator("item_name", "unit", "note")
+    @field_validator("item_name", "unit", "note", "category")
     @classmethod
     def clean_text_fields(cls, value: str | None) -> str | None:
         return _clean_optional_text(value)
@@ -156,6 +162,7 @@ class TransactionRecord(BaseModel):
     transcript: str | None
     normalized_text: str | None
     note: str | None
+    category: str | None = None
     reference_date: Date | None = None
     extraction_method: str | None = None
     receipt: ReceiptInput | None = None

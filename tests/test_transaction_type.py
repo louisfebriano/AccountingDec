@@ -10,6 +10,7 @@ class TransactionTypeClassifierTests(unittest.TestCase):
             "Restok minyak goreng 5 liter 90rb",
             "Ristok galon Aqua 15 botol 52.000",
             "Bayar listrik toko 300rb",
+            "Kemarin stok bakso 3 bungkus totalnya 60rb",
         )
 
         for text in examples:
@@ -39,13 +40,35 @@ class TransactionTypeClassifierTests(unittest.TestCase):
         examples = (
             "Transfer 500rb",
             "Catat beras 2 karung seharga 100rb",
-            "Stok masuk 10 karung",
             "Modal usaha 5 juta",
         )
 
         for text in examples:
             with self.subTest(text=text):
                 self.assertEqual(classify_transaction_type(text), "unknown")
+
+    def test_stock_restock_is_expense_but_stock_depletion_is_not(self):
+        # "stok <barang>" berarti membeli/restock stok = pengeluaran.
+        restock = (
+            "Stok masuk 10 karung",
+            "Stock gas LPG 2 tabung 120rb",
+            "Stok telur 2 tray 60k kemarin",
+        )
+        for text in restock:
+            with self.subTest(text=text):
+                self.assertEqual(classify_transaction_type(text), "expense")
+
+        # Laporan penjualan yang menyebut kondisi stok tetap pemasukan,
+        # bukan pengeluaran.
+        daily_income = (
+            "Stok habis, semua dagangan laku 300rb",
+            "Stok masih banyak, yang laku barusan 150rb",
+            "Stok sudah habis, jualan tadi laku 200rb",
+            "Kemarin jualan laku 150rb, stok tinggal sedikit",
+        )
+        for text in daily_income:
+            with self.subTest(text=text):
+                self.assertEqual(classify_transaction_type(text), "income")
 
     def test_conflicting_strong_signals_are_unknown(self):
         self.assertEqual(

@@ -1,3 +1,5 @@
+import { categoryLabel } from "./categories.js?v=3";
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function localDateKey(value = new Date()) {
@@ -99,4 +101,39 @@ export function filterTransactionsByPeriod(history, selection, today = new Date(
     ),
     bounds,
   };
+}
+
+// Nilai kosong berarti seluruh kategori; label memakai nama preset atau nama
+// kustom pengguna, dan transaksi tanpa kategori memakai label UNCATEGORIZED.
+export function filterTransactionsByCategory(transactions, category) {
+  const label = String(category || "").trim();
+  if (!label) return [...transactions];
+  return transactions.filter(
+    (transaction) => categoryLabel(transaction.category) === label,
+  );
+}
+
+// Total dan jumlah transaksi per kategori untuk periode yang sedang aktif.
+// Transaksi berjenis unknown dikeluarkan agar sama dengan ringkasan dan grafik.
+export function summarizeCategories(transactions) {
+  const grouped = new Map();
+  transactions.forEach((transaction) => {
+    if (!["income", "expense"].includes(transaction.transaction_type)) return;
+    const label = categoryLabel(transaction.category);
+    const key = `${transaction.transaction_type}:${label}`;
+    const total = Number(transaction.total_price) || 0;
+    const entry = grouped.get(key) || {
+      label,
+      transaction_type: transaction.transaction_type,
+      total: 0,
+      count: 0,
+    };
+    entry.total += total;
+    entry.count += 1;
+    grouped.set(key, entry);
+  });
+  return [...grouped.values()].sort(
+    (left, right) => right.total - left.total
+      || left.label.localeCompare(right.label, "id"),
+  );
 }

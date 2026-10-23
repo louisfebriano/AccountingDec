@@ -34,7 +34,11 @@ USER_A = "11111111-1111-4111-8111-111111111111"
 USER_B = "22222222-2222-4222-8222-222222222222"
 
 
-def build_engine(*, wrong_receipt_item_foreign_key=False):
+def build_engine(
+    *,
+    wrong_receipt_item_foreign_key=False,
+    with_category=True,
+):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     metadata = MetaData()
     Table(
@@ -49,6 +53,11 @@ def build_engine(*, wrong_receipt_item_foreign_key=False):
         Column("unit", String),
         Column("total_price", Integer, nullable=False),
         Column("transaction_date", Date, nullable=False),
+        *(
+            [Column("category", String(50))]
+            if with_category
+            else []
+        ),
         Column("original_text", Text),
         Column("transcript", Text),
         Column("normalized_text", Text),
@@ -114,7 +123,7 @@ def build_engine(*, wrong_receipt_item_foreign_key=False):
     return engine
 
 
-def manual_payload(total=125_000):
+def manual_payload(total=125_000, category="Bahan baku"):
     return TransactionCreate(
         source="manual",
         transaction_type="expense",
@@ -124,6 +133,7 @@ def manual_payload(total=125_000):
         total_price=total,
         date=date(2026, 8, 23),
         note="Belanja warung",
+        category=category,
     )
 
 
@@ -140,6 +150,7 @@ class TransactionRepositoryTests(unittest.TestCase):
         self.assertEqual(created["user_id"], USER_A)
         self.assertEqual(created["item_name"], "Gas LPG")
         self.assertEqual(created["total_price"], 125_000)
+        self.assertEqual(created["category"], "Bahan baku")
         self.assertIsNone(created["receipt"])
 
         records = self.repository.list(USER_A)
@@ -152,9 +163,43 @@ class TransactionRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(updated["total_price"], 130_000)
         self.assertEqual(updated["note"], "Harga diperbarui")
+        self.assertEqual(updated["category"], "Bahan baku")
 
         self.repository.delete(created["id"], USER_A)
         self.assertEqual(self.repository.list(USER_A), [])
+
+    def test_category_can_be_set_replaced_and_cleared(self):
+        created = self.repository.create(
+            manual_payload(category="Operasional"), USER_A
+        )
+        self.assertEqual(created["category"], "Operasional")
+
+        replaced = self.repository.update(
+            created["id"], TransactionUpdate(category="Sewa"), USER_A
+        )
+        self.assertEqual(replaced["category"], "Sewa")
+
+        cleared = self.repository.update(
+            created["id"], TransactionUpdate(category=None), USER_A
+        )
+        self.assertIsNone(cleared["category"])
+
+        without_category = self.repository.create(
+            manual_payload(category=None), USER_B
+        )
+        self.assertIsNone(without_category["category"])
+
+    def test_missing_category_column_reports_migration_file(self):
+        engine = build_engine(with_category=False)
+        repository = TransactionRepository(engine)
+        try:
+            with self.assertRaisesRegex(
+                DatabaseSchemaError,
+                r"field: category.*sql/add_transaction_category\.sql",
+            ):
+                repository.create(manual_payload(), USER_A)
+        finally:
+            engine.dispose()
 
     def test_timestamp_transaction_date_is_serialized_as_date_only(self):
         self.assertEqual(

@@ -1,3 +1,14 @@
-{"input": "Beli tepung terigu 2 karung, total 250rb", "output": {"item_name": "Tepung terigu", "quantity": 2, "unit": "karung", "total_price": 250000, "date": null}}
-{"input": "Tadi pagi restock minyak goreng 5 liter, abis 90 ribu", "output": {"item_name": "Minyak goreng", "quantity": 5, "unit": "liter", "total_price": 90000, "date": null}}
-{"input": "Tanggal 3 Juli beli gula pasir 10kg seharga 150k", "output": {"item_name": "Gula pasir", "quantity": 10, "unit": "kg", "total_price": 150000, "date": "2026-07-03"}}
+{"input": "Beli tepung terigu 2 karung, total 250rb", "output": {"item_name": "Tepung terigu", "quantity": 2, "unit": "karung", "total_price": 250000, "date": null, "transaction_type": "expense"}}
+{"input": "Tadi pagi restock minyak goreng 5 liter, abis 90 ribu", "output": {"item_name": "Minyak goreng", "quantity": 5, "unit": "liter", "total_price": 90000, "date": null, "transaction_type": "expense"}}
+{"input": "Tanggal 3 Juli beli gula pasir 10kg seharga 150k", "output": {"item_name": "Gula pasir", "quantity": 10, "unit": "kg", "total_price": 150000, "date": "2026-07-03", "transaction_type": "expense"}}
+{"input": "Kemarin stok bakso 3 bungkus totalnya 60rb", "output": {"item_name": "Bakso", "quantity": 3, "unit": "bungkus", "total_price": 60000, "date": null, "transaction_type": "expense"}}
+{"input": "barusan stok telur 10kg 120rb", "output": {"item_name": "Telur", "quantity": 10, "unit": "kg", "total_price": 120000, "date": null, "transaction_type": "expense"}}
+{"input": "kmrn stok gas 2 tabung totalnya 90rb", "output": {"item_name": "Gas", "quantity": 2, "unit": "tabung", "total_price": 90000, "date": null, "transaction_type": "expense"}}
+{"input": "tadi stok ayam 5kg abis 55rb", "output": {"item_name": "Ayam", "quantity": 5, "unit": "kg", "total_price": 55000, "date": null, "transaction_type": "expense"}}
+{"input": "ngisi stok bakso 3 bungkus totalnya 60rb", "output": {"item_name": "Bakso", "quantity": 3, "unit": "bungkus", "total_price": 60000, "date": null, "transaction_type": "expense"}}
+{"input": "kemarin stok minyak goreng 5ltr 60rb", "output": {"item_name": "Minyak goreng", "quantity": 5, "unit": "liter", "total_price": 60000, "date": null, "transaction_type": "expense"}}
+{"input": "stok saus sambal 15btl 75rb tadi sore", "output": {"item_name": "Saus sambal", "quantity": 15, "unit": "botol", "total_price": 75000, "date": null, "transaction_type": "expense"}}
+{"input": "beli stok terigu 5kg totalnya 45rb kemarin", "output": {"item_name": "Terigu", "quantity": 5, "unit": "kg", "total_price": 45000, "date": null, "transaction_type": "expense"}}
+{"input": "ambil stok beras 2 karung seharga 200rb", "output": {"item_name": "Beras", "quantity": 2, "unit": "karung", "total_price": 200000, "date": null, "transaction_type": "expense"}}
+{"input": "tadi pagi stok kopi 2krg 160rb", "output": {"item_name": "Kopi", "quantity": 2, "unit": "karung", "total_price": 160000, "date": null, "transaction_type": "expense"}}
+{"input": "stok gula pasir 2 karung seharga 150k kemarin", "output": {"item_name": "Gula pasir", "quantity": 2, "unit": "karung", "total_price": 150000, "date": null, "transaction_type": "expense"}}

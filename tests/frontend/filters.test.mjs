@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { filterTransactionsByPeriod, getPeriodBounds } from "../../pwa/filters.js";
+import {
+  filterTransactionsByCategory,
+  filterTransactionsByPeriod,
+  getPeriodBounds,
+  summarizeCategories,
+} from "../../pwa/filters.js";
 
 const today = new Date(2026, 7, 22, 12);
 const history = [
@@ -44,4 +49,39 @@ test("filter semua tidak mengubah urutan atau data", () => {
   const result = filterTransactionsByPeriod(history, { mode: "all" }, today);
   assert.deepEqual(result.transactions, history);
   assert.notEqual(result.transactions, history);
+});
+
+const categorized = [
+  { id: "a", category: "Bahan baku", transaction_type: "expense", total_price: 40000 },
+  { id: "b", category: null, transaction_type: "expense", total_price: 30000 },
+  { id: "c", category: "Penjualan", transaction_type: "income", total_price: 120000 },
+];
+
+test("filter kategori memakai label tampilan dan mempertahankan urutan", () => {
+  const all = filterTransactionsByCategory(categorized, "");
+  assert.deepEqual(all.map((item) => item.id), ["a", "b", "c"]);
+  assert.notEqual(all, categorized);
+
+  const expense = filterTransactionsByCategory(categorized, "Bahan baku");
+  assert.deepEqual(expense.map((item) => item.id), ["a"]);
+
+  const untagged = filterTransactionsByCategory(categorized, "Belum dikategorikan");
+  assert.deepEqual(untagged.map((item) => item.id), ["b"]);
+
+  assert.deepEqual(filterTransactionsByCategory(categorized, "Sewa"), []);
+});
+
+test("ringkasan kategori menjumlahkan transaksi per jenis lalu diurutkan", () => {
+  const rows = summarizeCategories([
+    ...categorized,
+    { id: "d", category: "Bahan baku", transaction_type: "expense", total_price: 10000 },
+    { id: "e", category: "Tanpa jenis", transaction_type: "unknown", total_price: 999999 },
+  ]);
+
+  assert.deepEqual(rows, [
+    { label: "Penjualan", transaction_type: "income", total: 120000, count: 1 },
+    { label: "Bahan baku", transaction_type: "expense", total: 50000, count: 2 },
+    { label: "Belum dikategorikan", transaction_type: "expense", total: 30000, count: 1 },
+  ]);
+  assert.deepEqual(summarizeCategories([]), []);
 });

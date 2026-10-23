@@ -39,6 +39,7 @@ def transaction_record(transaction_id=None):
         "transcript": None,
         "normalized_text": None,
         "note": "Modal masuk",
+        "category": "Modal usaha",
         "reference_date": None,
         "extraction_method": None,
         "receipt": None,
@@ -154,6 +155,38 @@ class TransactionApiTests(unittest.TestCase):
         self.assertEqual(updated.json()["data"]["total_price"], 650000)
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.repository.deleted, self.repository.record["id"])
+
+    def test_category_is_saved_and_updated(self):
+        payload = {
+            "source": "manual",
+            "transaction_type": "expense",
+            "total_price": 125000,
+            "date": "2026-08-27",
+            "category": "  bahan baku  ",
+        }
+        created = client.post("/transactions", json=payload)
+        updated = client.put(
+            f"/transactions/{self.repository.record['id']}",
+            json={"category": None},
+        )
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.repository.created.category, "bahan baku")
+        self.assertIsNone(self.repository.updated[1].category)
+        self.assertEqual(updated.status_code, 200)
+
+    def test_category_longer_than_fifty_characters_is_rejected(self):
+        response = client.post(
+            "/transactions",
+            json={
+                "source": "manual",
+                "transaction_type": "expense",
+                "total_price": 50000,
+                "date": "2026-08-27",
+                "category": "x" * 51,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
 
     def test_unknown_transaction_type_is_rejected(self):
         response = client.post(

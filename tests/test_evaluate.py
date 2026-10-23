@@ -193,7 +193,7 @@ class EvaluationPipelineTests(unittest.TestCase):
 
         evaluate_module.validate_evaluation_dataset(dataset)
 
-        self.assertEqual(len(dataset), 52)
+        self.assertEqual(len(dataset), 56)
         normalized_inputs = {
             " ".join(row["input"].casefold().split()) for row in dataset
         }
@@ -205,7 +205,7 @@ class EvaluationPipelineTests(unittest.TestCase):
             )
             for transaction_type in ("income", "expense")
         }
-        self.assertEqual(type_counts, {"income": 13, "expense": 39})
+        self.assertEqual(type_counts, {"income": 13, "expense": 43})
         self.assertTrue(
             all(
                 classify_transaction_type(row["input"])

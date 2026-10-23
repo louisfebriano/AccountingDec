@@ -41,6 +41,17 @@ EXPENSE_PHRASES = (
     "bayar bahan",
 )
 
+# "stok <nama barang>" => restock/pembelian stok = pengeluaran. Kata "stok"
+# TIDAK dipakai sebagai frasa bebas agar kalimat laporan pemasukan seperti
+# "Stok habis, semua laku 300rb" tidak berubah menjadi ambigu: penanda yang
+# mengecualikan menangani frasa kondisi stok (habis/kosong/menipis/masih/tinggal).
+_STOCK_RESTOCK_PATTERN = re.compile(
+    r"\b(?:stok|stock)\s+"
+    r"(?!habis|kosong|menipis|abisin|masih|tinggal|banyak|sedikit|sudah|dah)\b"
+    r"[a-z]\w*",
+    re.IGNORECASE,
+)
+
 # Aturan konteks membedakan siapa yang membayar dan tujuan pembayarannya.
 INCOME_CONTEXT_PATTERNS = (
     re.compile(r"\b(?:pelanggan|pembeli)\s+(?:sudah\s+)?(?:bayar|membayar)\b"),
@@ -121,6 +132,7 @@ def classify_transaction_type(text: str) -> TransactionType:
     has_expense = (
         _EXPENSE_PHRASE_PATTERN.search(normalized) is not None
         or _matches_context(normalized, EXPENSE_CONTEXT_PATTERNS)
+        or (_STOCK_RESTOCK_PATTERN.search(normalized) is not None)
         or (has_purchase and not customer_purchase)
     )
 

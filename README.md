@@ -104,6 +104,37 @@ petunjuk kuat atau mengandung sinyal yang saling bertentangan. Nilai ini tidak
 diteruskan sebagai transaksi berhasil: pipeline berhenti sebelum memuat Llama dan
 mengembalikan `success: false`, `data: null`, serta pesan agar konteks diperjelas.
 
+Frasa `stok <barang>` (misalnya `kemarin stok bakso 3 bungkus totalnya 60rb`)
+dianggap restock/pembelian stok sehingga diklasifikasikan pengeluaran, sama seperti
+`restok`/`restock`/`ristok`. Kata `stok` tidak dipakai sebagai frasa bebas agar
+laporan pemasukan seperti `Stok habis, semua dagangan laku 300rb` tetap dibaca
+sebagai penjualan; pola kondisi stok (`habis`, `kosong`, `masih`, `tinggal`, dst.)
+dikecualikan dari penanda pengeluaran.
+
+Contoh variasi kalimat kasual restock yang terdeteksi sebagai pengeluaran dan
+diektstrak secara deterministik (semuanya diuji, lihat
+`tests/test_postprocess_transaction_type.py` dan `tests/test_transaction_type.py`):
+
+```text
+barusan stok telur 10kg 120rb                        -> Telur, 10 kg, 120000
+kmrn stok gas 2 tabung totalnya 90rb                 -> Gas, 2 tabung, 90000
+tadi stok ayam 5kg abis 55rb                         -> Ayam, 5 kg, 55000
+ngisi stok bakso 3 bungkus totalnya 60rb             -> Bakso, 3 bungkus, 60000
+kemarin stok minyak goreng 5ltr 60rb                 -> Minyak goreng, 5 liter, 60000
+stok saus sambal 15btl 75rb tadi sore                -> Saus sambal, 15 botol, 75000
+beli stok terigu 5kg totalnya 45rb kemarin           -> Terigu, 5 kg, 45000
+ambil stok beras 2 karung seharga 200rb              -> Beras, 2 karung, 200000
+tadi pagi stok kopi 2krg 160rb                       -> Kopi, 2 karung, 160000
+stok gula pasir 2 karung seharga 150k kemarin        -> Gula pasir, 2 karung, 150000
+```
+
+Sedangkan laporan pemasukan tetap diklasifikasikan `income` walau menyebut stok:
+
+```text
+Kemarin jualan laku 150rb, stok tinggal sedikit     -> income
+Stok habis, semua dagangan laku 300rb                -> income
+```
+
 Klasifikasi final pada pipeline produksi dilakukan dengan aturan kata/frasa dan
 konteks berbatas kata. Adapter v2 tetap dilatih menghasilkan `transaction_type` agar
 keluaran mentah enam field dapat dievaluasi, tetapi nilai produksi selalu ditimpa oleh
@@ -122,13 +153,22 @@ Sistem membedakan dua bentuk pemasukan:
 Pengeluaran berupa pembelian atau biaya operasional tetap diproses seperti sebelumnya.
 Variasi bahasa kasual seperti `pemasukkan`, `duit masuk`, `omzet`, dan `penghasilan`
 juga dikenali. Kata `masuk` tanpa konteks uang—misalnya `stok masuk 10 karung`—tidak
-otomatis dianggap pemasukan.
+otomatis dianggap pemasukan; karena `stok <barang>` adalah penanda restock, kalimat
+tersebut justru diklasifikasikan pengeluaran.
 
 `item_name`, `quantity`, dan `unit` hanya diisi apabila informasinya benar-benar
 disebutkan pada teks atau transkrip pengguna. Post-processing akan mengganti nilai
 hasil model menjadi `null` jika tidak dapat dilacak ke input; angka harga dan tanggal
 tidak diperlakukan sebagai quantity. Ukuran produk yang menjadi bagian nama barang,
 seperti `Gas 3kg`, juga tidak otomatis dianggap sebagai quantity/unit transaksi.
+
+Hal yang sama berlaku untuk `total_price`: ia hanya diisi ketika harga benar-benar
+disebutkan pada input (misalnya `60 ribu`, `150rb`, `180.000`, atau `300000`).
+Apabila kalimat tidak menyebut nominal—seperti `beli terigu 5kg`—post-processing
+tidak mempercayai nominal yang dikarang model dan membiarkan `total_price` bernilai
+`null`; pengguna melengkapi nominal secara manual pada dialog konfirmasi sebelum
+transaksi disimpan. Dengan demikian transaksi tidak pernah tercatat dengan harga
+rekaan yang tidak disebutkan pengguna.
 
 Contoh pemasukan umum:
 
@@ -225,6 +265,7 @@ skripsi/
 │   ├── app.js              # state UI, instalasi, dan integrasi form
 │   ├── api.js              # client ekstraksi dan CRUD transaksi Supabase
 │   ├── storage.js          # validasi record serta cache/fallback lokal
+│   ├── categories.js       # preset kategori UMKM, logo, normalisasi, pilihan popup
 │   ├── filters.js          # filter tanggal lokal minggu/bulan/tahun/custom
 │   ├── chart.js            # agregasi dan grafik tren tujuh hari
 │   ├── theme.js            # tema putih/gelap dan preferensi perangkat
@@ -494,11 +535,11 @@ Training membaca `data/processed/train.jsonl` lalu menambahkan contoh generalisa
 dari `data/processed/train-augmentation.jsonl` bila file tersebut tersedia. Contoh
 augmentasi memakai kalimat yang berbeda dari dataset evaluasi dan mencakup modifier
 nama barang, unit singkat, angka rapat, pecahan sederhana, kemasan bertingkat, variasi
-tanggal, serta contoh `income` dan `expense`. Sumber training lama yang memiliki lima
-field diperkaya secara deterministik menjadi enam field. Tanggal diselesaikan terhadap
-beberapa reference date yang diturunkan dari `TRAIN_REFERENCE_DATE`, sehingga adapter
-tidak sekadar menghafal satu tanggal evaluasi. Jenis transaksi diambil hanya dari arah
-yang eksplisit dan input ambigu dikeluarkan. Split validation dibuat terstratifikasi
+tanggal, serta contoh `income` dan `expense`. Setiap baris training sudah memuat
+`transaction_type` secara native; baris tanpa arah transaksi yang valid dikeluarkan.
+Tanggal (`date`) tetap diselesaikan ulang saat training terhadap beberapa reference
+date yang diturunkan dari `TRAIN_REFERENCE_DATE`, sehingga adapter tidak sekadar
+menghafal satu tanggal evaluasi. Split validation dibuat terstratifikasi
 dari data training hanya sebagai fallback. Secara default training memakai
 `validation-six-fields.jsonl`, yaitu 24 contoh held-out yang seimbang (12 income dan
 12 expense) dengan variasi bahasa kasual, tanggal, unit singkat, field null, biaya,
@@ -658,6 +699,13 @@ tersebut memindahkan relasi ke `receipt_items.receipt_id → receipts.id`, menga
 Migrasi memeriksa orphan record lebih dahulu dan membatalkan proses bila relasi data
 lama belum valid.
 
+Fitur kategori memakai kolom `transactions.category` yang sudah ada pada
+`sql/supabase_schema.sql`. Instalasi lama menjalankan
+[`sql/add_transaction_category.sql`](sql/add_transaction_category.sql) untuk menambah
+kolom `text` maksimal 50 karakter secara idempotent. Repository menolak CRUD dengan
+pesan schema apabila kolom ini belum dibuat, sehingga kategori yang dipilih pengguna
+tidak hilang diam-diam saat disimpan.
+
 Aplikasi memvalidasi tabel saat koneksi pertama. Nama tabel dapat diubah melalui
 environment variable. Koneksi dibuat secara lazy dan di-cache, sehingga model
 Llama/Whisper tidak ikut dimuat oleh login atau CRUD. Warmup Llama pada startup
@@ -757,9 +805,39 @@ database tidak disimpan di cache.
 ### Riwayat, transaksi manual, dan grafik
 
 Tombol **Tambah manual** membuka form tanpa memanggil Llama atau Whisper. Jenis
-transaksi, tanggal, dan nominal wajib diisi. Nama barang, quantity, unit, dan catatan
-bersifat opsional; field yang kosong disimpan sebagai `null`. Dalam mode Supabase,
-perangkat harus online untuk memastikan perubahan benar-benar tersimpan di server.
+transaksi, tanggal, dan nominal wajib diisi. Nama barang, quantity, unit, dan
+catatan bersifat opsional; field yang kosong disimpan sebagai `null`. Dalam mode
+Supabase, perangkat harus online untuk memastikan perubahan benar-benar tersimpan di
+server.
+
+Setiap transaksi menyimpan satu kolom `transactions.category` berisi kategori UMKM
+maksimal 50 karakter. Setiap preset memiliki logo emoji (misalnya 🛒 Penjualan, 📦
+Bahan baku, ⚙️ Operasional, 🏷️ Belum dikategorikan) yang ditampilkan pada chip
+pemilih, dropdown filter, ringkasan kategori, serta label kartu hasil, detail, dan
+riwayat agar kategori mudah dibedakan secara visual; nilai yang disimpan ke database
+tetap nama polos tanpa emoji. Sebelum transaksi dikirim ke server, input teks,
+suara, form manual, dan edit melewati dialog **Konfirmasi transaksi**. Dialog
+menampilkan hasil ekstraksi sebagai field yang dapat diedit—jenis transaksi, tanggal,
+nominal, nama barang, quantity, unit, dan catatan—beserta pemilih kategori dengan
+chip preset `Bahan baku`, `Operasional`, `Gaji karyawan`, `Sewa`, `Listrik & air`,
+`Transportasi`, `Perawatan alat`, `Pajak`, `Penjualan`, `Jasa`, `Pendapatan lain`,
+`Modal usaha`, `Lainnya`, dan `Belum dikategorikan`, serta input **Kategori lain**
+untuk teks kustom. Nilai yang sama dengan preset tanpa memperhatikan huruf
+besar/kecil disimpan memakai label preset agar rekap tidak terpecah. Field nominal
+pada dialog tampil dengan pemisah ribuan Indonesia (contoh `250.000`) agar mudah
+dibaca; titik tersebut dibuang sebelum nilai disimpan.
+
+Form manual/edit juga memiliki pemilih kategori yang sama, sehingga kategori dapat
+diubah langsung saat mengedit riwayat tanpa langkah tambahan; pilihan tersebut
+diteruskan dalam keadaan terseleksi ke dialog konfirmasi. Tombol **Simpan
+transaksi** mewajibkan pemilihan kategori; **Lewati kategori** menyimpan kategori
+lama saat mengedit atau `Belum dikategorikan` untuk transaksi baru, jadi kategori
+lama tidak hilang ketika user sekadar memperbaiki nominal. Bila nominal tidak terbaca
+dari input, dialog menampilkan peringatan dan mengharuskan nominal diisi manual
+sebelum transaksi dapat disimpan. Kategori tetap dapat diubah melalui tombol **Edit**.
+Riwayat lama tanpa kategori tampil dengan label yang sama dan baru dikategorikan
+saat diedit. Scan Nota memakai editor barangnya sendiri dan tetap meminta kategori
+melalui popup **Pilih kategori** yang sama setelah editor dikonfirmasi.
 
 Tekan salah satu item riwayat untuk membuka detailnya. Popup detail menampilkan data
 transaksi, sumber, waktu pencatatan, dan input asli. Tombol **Edit** memperbarui data
@@ -770,6 +848,13 @@ Riwayat dan kartu ringkasan dapat difilter berdasarkan minggu kalender
 Senin–Minggu, bulan, tahun, rentang tanggal khusus yang inklusif, atau seluruh data.
 Perhitungan memakai tanggal lokal agar tanggal tidak bergeser karena UTC. Filter
 tidak menghapus atau memodifikasi transaksi yang tersimpan.
+
+Filter **Kategori** berdiri seiring filter periode dan hanya menyaring tampilan
+riwayat, kartu ringkasan, serta grafik; labelnya dibuat dari kategori yang benar-benar
+ada pada riwayat akun. Panel **Ringkasan kategori** menjumlahkan pemasukan dan
+pengeluaran per kategori pada periode aktif, mengurutkan dari nominal terbesar,
+dan menampilkan jumlah transaksi pada tiap baris. Transaksi berjenis `unknown`
+dikecualikan, sama seperti kartu ringkasan dan grafik.
 
 Grafik tren menampilkan agregasi pemasukan berwarna hijau dan pengeluaran berwarna
 merah untuk tujuh hari kalender terakhir, termasuk hari ini. Hari tanpa transaksi

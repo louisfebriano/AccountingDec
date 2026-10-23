@@ -24,7 +24,8 @@ test("barang nota dapat diedit sebelum submit dan tanggal menggunakan hari ini",
   assert.match(app, /function collectReceiptEditorItems/);
   assert.match(app, /receiptAddItemButton\.addEventListener/);
   assert.match(app, /receiptConfirmDate\.value = getLocalReferenceDate\(\)/);
-  assert.match(app, /items: collectReceiptEditorItems\(\)/);
+  assert.match(app, /const items = collectReceiptEditorItems\(\)/);
+  assert.match(app, /items,\s*\n\s*category,/);
   assert.match(app, /showActionPopup\("Transaksi nota berhasil disimpan\."\)/);
 });
 

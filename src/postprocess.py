@@ -383,11 +383,17 @@ def parse_and_validate(
        halusinasi tidak tersimpan.
 
     Aturan pengisian field "total_price":
-    Kalau user_input mengandung pola "angka+akhiran ribuan/ratusan" yang jelas
-    (rb/ribu/rebu/k/ratus), nilai itu yang dipakai (override hasil model). Ini karena
-    konversi satuan harga adalah aturan matematis pasti, bukan sesuatu yang perlu "ditebak"
-    model -- lebih reliable diambil lewat rule daripada bergantung ke soft prompt yang
-    kapasitasnya terbatas untuk generalisasi ke variasi kalimat baru.
+    1. Kalau user_input mengandung pola harga eksplisit (akhiran rb/ribu/rebu/k/ratus/
+       juta/jt, pemisah ribuan bertitik seperti "180.000", atau angka polos 4+ digit),
+       nilai rule-based itulah yang dipakai (override hasil model). Ini karena konversi
+       satuan harga adalah aturan matematis pasti, bukan sesuatu yang perlu "ditebak"
+       model -- lebih reliable diambil lewat rule daripada bergantung ke soft prompt
+       yang kapasitasnya terbatas untuk generalisasi ke variasi kalimat baru.
+    2. Kalau tidak ada harga yang dapat dilacak ke kalimat pengguna, total_price diisi
+       null. Nilai harga tebakan model TIDAK dipercaya, karena model dapat mengarang
+       nominal yang tidak disebut pengguna (mis. "beli terigu 5kg" menjadi 15000).
+       Nominal yang kosong dilengkapi pengguna pada popup konfirmasi sebelum transaksi
+       disimpan ke database.
 
     Return dict {"success": bool, "data": ..., "error": ...}
     """
@@ -421,10 +427,13 @@ def parse_and_validate(
     result_data["date"] = resolved or reference_date.isoformat()
 
     # ---- Override total_price kalau pola harga eksplisit ketemu di kalimat asli ----
+    # Harga yang tidak dapat dilacak ke kalimat pengguna dianggap TIDAK disebutkan:
+    # nilai tebakan model (mis. total_price 15000 untuk "beli terigu 5kg") tidak
+    # dipercaya agar nominal rekaan tidak otomatis tercatat. Popup konfirmasi di
+    # frontend menampilkan nominal kosong dan meminta pengguna mengisinya
+    # sebelum transaksi dikirim ke Supabase.
     if user_input:
-        extracted_price = extract_price_from_text(user_input)
-        if extracted_price is not None:
-            result_data["total_price"] = extracted_price
+        result_data["total_price"] = extract_price_from_text(user_input)
 
     # Jangan mempercayai detail opsional yang hanya muncul dari keluaran model.
     # Ketiganya harus dapat dilacak kembali ke kalimat pengguna agar halusinasi

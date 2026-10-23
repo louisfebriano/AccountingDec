@@ -50,3 +50,7 @@
 {"input":"terjual 2 dus air mineral 96rb","output":{"item_name":"Air mineral","quantity":2,"unit":"dus","total_price":96000,"date":"2026-08-24","transaction_type":"income"}}
 {"input":"pembeli beli 4 porsi ayam penyet 80rb tanggal 22 Agustus","output":{"item_name":"Ayam penyet","quantity":4,"unit":"porsi","total_price":80000,"date":"2026-08-22","transaction_type":"income"}}
 {"input":"3 hari lalu 20 buah donat laku total 100rb","output":{"item_name":"Donat","quantity":20,"unit":"buah","total_price":100000,"date":"2026-08-21","transaction_type":"income"}}
+{"input":"Barusan stok saus tiram 12btl habis 60rb","output":{"item_name":"Saus tiram","quantity":12,"unit":"botol","total_price":60000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Kmrn stock mie instan 10 dus totalnya 130rb","output":{"item_name":"Mie instan","quantity":10,"unit":"dus","total_price":130000,"date":"2026-08-23","transaction_type":"expense"}}
+{"input":"Tadi stok kerupuk udang 3kg seharga 45k","output":{"item_name":"Kerupuk udang","quantity":3,"unit":"kg","total_price":45000,"date":"2026-08-24","transaction_type":"expense"}}
+{"input":"Kemarin stok susu kental manis 2 dus isi 48 sachet total 96rb","output":{"item_name":"Susu kental manis","quantity":2,"unit":"dus","total_price":96000,"date":"2026-08-23","transaction_type":"expense"}}

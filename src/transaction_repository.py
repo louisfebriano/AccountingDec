@@ -162,6 +162,11 @@ class TransactionRepository:
                             "created_at",
                         ),
                     )
+                    if "category" not in transactions.c:
+                        raise DatabaseSchemaError(
+                            "Tabel transactions belum memiliki field: category. "
+                            "Jalankan migrasi sql/add_transaction_category.sql."
+                        )
                     _required_columns(receipts, ("id", "transaction_id"))
                     _required_columns(
                         receipt_items,
@@ -415,6 +420,7 @@ class TransactionRepository:
             "transcript": self._optional_value(row, "transcript"),
             "normalized_text": self._optional_value(row, "normalized_text"),
             "note": self._optional_value(row, "note"),
+            "category": self._optional_value(row, "category"),
             "reference_date": self._optional_value(row, "reference_date"),
             "extraction_method": self._optional_value(row, "extraction_method"),
             "receipt": receipt,

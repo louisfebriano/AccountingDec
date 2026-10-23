@@ -14,6 +14,8 @@ create table if not exists public.transactions (
     unit text,
     total_price bigint not null check (total_price > 0),
     transaction_date date not null,
+    category text constraint transactions_category_length
+        check (category is null or char_length(category) <= 50),
     original_text text,
     transcript text,
     normalized_text text,

@@ -16,17 +16,18 @@ test("service worker tidak mengintersep POST, endpoint API, atau audio", () => {
 });
 
 test("service worker menggunakan cache berversi dan membersihkan cache lama", () => {
-  assert.match(source, /catatkas-shell-v23/);
-  assert.match(source, /"\/styles\.css\?v=20"/);
-  assert.match(source, /"\/filters\.js\?v=16"/);
-  assert.match(source, /"\/chart\.js\?v=18"/);
+  assert.match(source, /catatkas-shell-v27/);
+  assert.match(source, /"\/styles\.css\?v=24"/);
+  assert.match(source, /"\/filters\.js\?v=17"/);
+  assert.match(source, /"\/categories\.js\?v=3"/);
+  assert.match(source, /"\/chart\.js\?v=19"/);
   assert.match(source, /"\/theme\.js\?v=16"/);
   assert.match(source, /caches\.delete/);
   assert.match(source, /request\.mode === "navigate"/);
   assert.match(source, /fetch\(request\)[\s\S]*\.catch\(\(\) => caches\.match\(request\)\)/);
   assert.match(appSource, /updateViaCache:\s*"none"/);
-  assert.match(indexSource, /\/styles\.css\?v=20/);
-  assert.match(indexSource, /\/app\.js\?v=22/);
+  assert.match(indexSource, /\/styles\.css\?v=24/);
+  assert.match(indexSource, /\/app\.js\?v=26/);
 });
 
 test("edit dan hapus menampilkan popup hasil aksi", () => {

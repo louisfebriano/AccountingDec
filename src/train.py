@@ -1,8 +1,9 @@
 """
 Training soft prompt tuning.
 
-Format target efektif selalu enam field. Dataset lama lima field akan diperkaya secara
-deterministik dengan date dan transaction_type sebelum tokenisasi.
+Format target efektif selalu enam field. transaction_type harus sudah tersedia native
+di data sumber; hanya date yang diselesaikan ulang terhadap reference_date aktif
+sebelum tokenisasi.
 
 Jalankan: python -m src.train
 """
@@ -17,7 +18,6 @@ from typing import Mapping, Optional, Sequence
 from . import config
 from .date_utils import resolve_date
 from .prompt_utils import build_inference_prompt, _dict_to_json_str
-from .transaction_type import classify_transaction_type
 
 TRAINING_FIELDS = (
     "item_name",
@@ -55,7 +55,7 @@ def load_training_rows(
 
 
 def prepare_training_example(example: Mapping, reference_date: date) -> dict:
-    """Ubah contoh legacy menjadi target enam field yang konsisten."""
+    """Selesaikan date terhadap reference_date dan validasi target enam field."""
     user_input = example.get("input")
     source_output = example.get("output")
     if not isinstance(user_input, str) or not user_input.strip():
@@ -63,8 +63,8 @@ def prepare_training_example(example: Mapping, reference_date: date) -> dict:
     if not isinstance(source_output, Mapping):
         raise ValueError("Output training harus berupa objek JSON.")
 
-    transaction_type = classify_transaction_type(user_input)
-    if transaction_type == "unknown":
+    transaction_type = source_output.get("transaction_type")
+    if transaction_type not in ("income", "expense"):
         raise AmbiguousTrainingExampleError(
             "Arah transaksi training ambigu; tambahkan konteks beli/restok atau jual."
         )

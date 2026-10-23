@@ -666,9 +666,9 @@ def build_dataset_audit(
         ),
         "training_target_field_coverage": field_coverage,
         "effective_training_contract": (
-            "src.train memperkaya sumber legacy menjadi enam field: date diselesaikan "
-            "terhadap beberapa variasi TRAIN_REFERENCE_DATE dan transaction_type "
-            "diturunkan dari arah transaksi yang eksplisit; contoh ambigu dikeluarkan."
+            "src.train menyelesaikan date terhadap beberapa variasi TRAIN_REFERENCE_DATE "
+            "saat tokenisasi; transaction_type sudah harus tersedia native di setiap "
+            "baris data, contoh tanpa arah transaksi yang valid dikeluarkan."
         ),
     }
     return audit
@@ -775,8 +775,10 @@ def build_report(
             ),
             (
                 "Training Soft Prompt efektif memakai target enam field dan prompt yang "
-                "membawa REFERENCE_DATE. Sumber legacy lima field diperkaya oleh src.train; "
-                "adapter lama harus dilatih ulang agar kontrak ini berlaku pada raw output."
+                "membawa REFERENCE_DATE. Dataset training sudah memuat transaction_type "
+                "secara native; hanya date yang diselaraskan ulang oleh src.train terhadap "
+                "reference date aktif. Adapter lama harus dilatih ulang agar kontrak ini "
+                "berlaku pada raw output."
             ),
         ],
     }

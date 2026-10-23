@@ -1,9 +1,45 @@
+# ---- Rahasia & environment ----
 .env
+.env.*
+!.env.example
+
+# ---- Python ----
 __pycache__/
 *.py[cod]
-/checkpoints
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# ---- Node.js ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- OS & editor ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# ---- Artefak model & training ----
+/checkpoints/
 /adapters/*
 !/adapters/.gitkeep
+
+# ---- Dataset lokal ----
 /data/processed/train.jsonl
 /data/processed/eval.jsonl
 /data/processed/eval-relative.jsonl
@@ -23,6 +59,18 @@ __pycache__/
 /data/processed/image/evaluation/*
 !/data/processed/image/evaluation/.gitkeep
 
+# ---- Hasil evaluasi ----
+# Laporan utama tetap dilacak; artefak evaluasi lain diabaikan.
+/results/*
+!/results/evaluation_report.json
 eval_results.json
-/results/
-/receipt-evaluation-report.json
+
+# ---- Instruksi agen lokal ----
+# Panduan kerja agen tidak ikut dipublikasikan.
+/AGENTS.md
+
+# ---- Scratch lokal (render dokumen, skrip sementara) ----
+/tmp/
+/output/
+/.codex-temp/
+/.tmp_doc_review/

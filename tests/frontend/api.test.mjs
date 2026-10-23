@@ -144,6 +144,7 @@ test("CRUD transaksi memakai endpoint backend dan payload tanpa id lokal", async
     total_price: 125000,
     date: "2026-08-23",
     note: "Belanja warung",
+    category: "Operasional",
     created_at: "2026-08-23T10:00:00Z",
   };
   const fetchImpl = async (url, options) => {
@@ -157,6 +158,7 @@ test("CRUD transaksi memakai endpoint backend dan payload tanpa id lokal", async
 
   await createTransactionRemote(record, { fetchImpl });
   await updateTransactionRemote("server-id", { total_price: 130000 }, { fetchImpl });
+  await updateTransactionRemote("server-id", { category: "" }, { fetchImpl });
   await deleteTransactionRemote("server-id", { fetchImpl });
 
   assert.equal(requests[0].url, "/transactions");
@@ -164,9 +166,37 @@ test("CRUD transaksi memakai endpoint backend dan payload tanpa id lokal", async
   assert.equal(createBody.id, undefined);
   assert.equal(createBody.created_at, undefined);
   assert.equal(createBody.total_price, 125000);
+  assert.equal(createBody.category, "Operasional");
   assert.equal(requests[1].url, "/transactions/server-id");
   assert.deepEqual(JSON.parse(requests[1].options.body), { total_price: 130000 });
-  assert.equal(requests[2].options.method, "DELETE");
+  assert.deepEqual(JSON.parse(requests[2].options.body), { category: null });
+  assert.equal(requests[3].options.method, "DELETE");
+});
+
+test("payload transaksi mengubah quantity kosong menjadi null", async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ success: true, data: { id: "server-id" }, error: null }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await createTransactionRemote({
+    source: "text",
+    transaction_type: "income",
+    item_name: null,
+    quantity: "",
+    unit: null,
+    total_price: 3000000,
+    date: "2026-08-23",
+    original_text: "pemasukkan hari ini 3 juta",
+  }, { fetchImpl });
+
+  const createBody = JSON.parse(requests[0].options.body);
+  assert.equal(createBody.quantity, null);
+  assert.equal(createBody.total_price, 3000000);
 });
 
 test("riwayat Supabase dapat dibaca dan localStorage dapat diimpor", async () => {

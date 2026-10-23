@@ -153,12 +153,16 @@ async function databaseFetch(path, options = {}) {
   }
 }
 
+function optionalNumber(value) {
+  return value === null || value === undefined || value === "" ? null : Number(value);
+}
+
 function transactionPayload(record) {
   return {
     source: record.source,
     transaction_type: record.transaction_type,
     item_name: record.item_name ?? null,
-    quantity: record.quantity ?? null,
+    quantity: optionalNumber(record.quantity),
     unit: record.unit ?? null,
     total_price: Number(record.total_price),
     date: record.date,
@@ -166,6 +170,7 @@ function transactionPayload(record) {
     transcript: record.transcript ?? null,
     normalized_text: record.normalized_text ?? null,
     note: record.note ?? null,
+    category: record.category ?? null,
     reference_date: record.reference_date ?? null,
     extraction_method: record.extraction_method ?? null,
     receipt: record.source === "receipt" ? record.receipt : null,
@@ -178,9 +183,6 @@ function transactionUpdatePayload(changes) {
     if (Object.hasOwn(changes, name)) payload[name] = transform(changes[name]);
   };
   const optionalText = (value) => String(value ?? "").trim() || null;
-  const optionalNumber = (value) => (
-    value === null || value === undefined || value === "" ? null : Number(value)
-  );
   copy("transaction_type");
   copy("item_name", optionalText);
   copy("quantity", optionalNumber);
@@ -188,6 +190,7 @@ function transactionUpdatePayload(changes) {
   copy("total_price", Number);
   copy("date");
   copy("note", optionalText);
+  copy("category", optionalText);
   return payload;
 }
 

@@ -152,7 +152,7 @@ class InferenceTransactionTypeTests(unittest.TestCase):
     def test_unknown_transaction_type_returns_error_before_model(self):
         examples = (
             "Transfer 500rb",
-            "Stok masuk 10 karung",
+            "Catat beras 2 karung seharga 100rb",
             "Beli tepung lalu jual kembali total 300rb",
         )
 

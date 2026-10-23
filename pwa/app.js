@@ -14,21 +14,33 @@ import {
   refreshSession,
   registerAccount,
   updateTransactionRemote,
-} from "/api.js?v=18";
+} from "/api.js?v=19";
 import {
   aggregateTransactionsByPeriod,
   describeChartPoint,
   describePeriodInsight,
   renderTransactionChart,
   CHART_WIDE_MEDIA_QUERY,
-} from "/chart.js?v=18";
-import { filterTransactionsByPeriod } from "/filters.js?v=16";
+} from "/chart.js?v=19";
+import {
+  filterTransactionsByCategory,
+  filterTransactionsByPeriod,
+  summarizeCategories,
+} from "/filters.js?v=17";
 import {
   EMPTY_VALUE,
   formatRupiah,
   presentTransaction,
   presentTransactionDetail,
-} from "/formatters.js?v=16";
+} from "/formatters.js?v=17";
+import {
+  CATEGORY_PRESETS,
+  UNCATEGORIZED,
+  categoryFromChoice,
+  categoryLabel,
+  categoryPresentation,
+  normalizeCategory,
+} from "/categories.js?v=3";
 import { RecorderSession } from "/recorder.js?v=16";
 import { RequestGate } from "/request-gate.js?v=16";
 import {
@@ -42,7 +54,7 @@ import {
   saveHistory,
   setHistoryUser,
   updateTransaction,
-} from "/storage.js?v=19";
+} from "/storage.js?v=21";
 import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=16";
 
 const $ = (selector) => document.querySelector(selector);
@@ -103,6 +115,7 @@ const elements = {
   resultType: $("#result-type"),
   resultPrice: $("#result-price"),
   resultDate: $("#result-date"),
+  resultCategory: $("#result-category"),
   resultItem: $("#result-item"),
   resultQuantity: $("#result-quantity"),
   resultUnit: $("#result-unit"),
@@ -141,8 +154,13 @@ const elements = {
   customStartDate: $("#custom-start-date"),
   customEndDate: $("#custom-end-date"),
   resetFilterButton: $("#reset-filter-button"),
+  categoryFilter: $("#category-filter"),
   activePeriod: $("#active-period"),
   filterError: $("#filter-error"),
+  categorySummary: $("#category-summary"),
+  categorySummaryList: $("#category-summary-list"),
+  categorySummaryPeriod: $("#category-summary-period"),
+  categoryPresets: $("#category-presets"),
   detailDialog: $("#transaction-detail-dialog"),
   closeDetailButton: $("#close-detail-button"),
   doneDetailButton: $("#done-detail-button"),
@@ -151,6 +169,7 @@ const elements = {
   detailType: $("#detail-type"),
   detailPrice: $("#detail-price"),
   detailDate: $("#detail-date"),
+  detailCategory: $("#detail-category"),
   detailItem: $("#detail-item"),
   detailQuantity: $("#detail-quantity"),
   detailUnit: $("#detail-unit"),
@@ -189,6 +208,33 @@ const elements = {
   manualUnit: $("#manual-unit"),
   manualNote: $("#manual-note"),
   manualFormError: $("#manual-form-error"),
+  categoryPickDialog: $("#category-pick-dialog"),
+  categoryPickSummary: $("#category-pick-summary"),
+  categoryPickGrid: $("#category-pick-grid"),
+  categoryPickCustom: $("#category-pick-custom"),
+  categoryPickError: $("#category-pick-error"),
+  categoryPickSkip: $("#category-pick-skip"),
+  categoryPickConfirm: $("#category-pick-confirm"),
+  confirmDialog: $("#transaction-confirm-dialog"),
+  closeConfirmButton: $("#close-transaction-confirm-button"),
+  confirmForm: $("#transaction-confirm-form"),
+  confirmSource: $("#transaction-confirm-source"),
+  confirmPriceWarning: $("#transaction-confirm-price-warning"),
+  confirmType: $("#transaction-confirm-type"),
+  confirmDate: $("#transaction-confirm-date"),
+  confirmTotalPrice: $("#transaction-confirm-total-price"),
+  confirmItemName: $("#transaction-confirm-item-name"),
+  confirmQuantity: $("#transaction-confirm-quantity"),
+  confirmUnit: $("#transaction-confirm-unit"),
+  confirmNoteField: $("#transaction-confirm-note-field"),
+  confirmNote: $("#transaction-confirm-note"),
+  confirmCategoryGrid: $("#transaction-confirm-category-grid"),
+  confirmCategoryCustom: $("#transaction-confirm-custom-category"),
+  confirmError: $("#transaction-confirm-error"),
+  confirmCancelButton: $("#transaction-confirm-cancel-button"),
+  confirmSkipButton: $("#transaction-confirm-skip-button"),
+  manualCategoryGrid: $("#manual-form-category-grid"),
+  manualCategoryCustom: $("#manual-form-custom-category"),
   actionPopup: $("#action-popup"),
   actionPopupIcon: $("#action-popup-icon"),
   actionPopupMessage: $("#action-popup-message"),
@@ -197,6 +243,427 @@ const elements = {
 
 const gate = new RequestGate();
 const recorder = new RecorderSession();
+
+CATEGORY_PRESETS.forEach((preset) => {
+  const option = document.createElement("option");
+  option.value = preset;
+  // Value yang terisi ke input tetap nama polos agar normalizeCategory cocok,
+  // sedangkan label membantu pengguna membedakan preset lewat logo.
+  option.label = categoryPresentation(preset);
+  elements.categoryPresets.append(option);
+});
+
+// Popup pemilihan kategori. Muncul untuk semua input (teks, suara, nota,
+// manual, dan edit) tepat sebelum transaksi dikirim ke Supabase.
+let selectedCategory = null;
+let categoryPickResolver = null;
+// Nilai yang dipakai saat tombol Lewati/Escape ditekan: kategori lama untuk edit,
+// "Belum dikategorikan" untuk transaksi baru.
+let categoryPickKeep = UNCATEGORIZED;
+
+// Dialog konfirmasi transaksi: menggantikan popup kategori untuk teks, suara,
+// manual, dan edit. Data hasil ekstraksi / form dapat diedit sebelum disimpan.
+let pendingConfirmation = null;
+let confirmCategorySelected = null;
+let confirmCategoryKeep = UNCATEGORIZED;
+let confirmSaving = false;
+
+// Pemilih kategori pada form manual/edit. Kategori dipilih langsung di form,
+// diteruskan sudah terseleksi ke dialog konfirmasi, dan ikut disimpan.
+let manualCategorySelected = null;
+
+function buildCategoryPicker() {
+  const chips = CATEGORY_PRESETS.map((preset) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "category-chip";
+    chip.dataset.category = preset;
+    chip.textContent = categoryPresentation(preset);
+    chip.setAttribute("aria-pressed", "false");
+    chip.addEventListener("click", () => selectCategoryChip(preset));
+    return chip;
+  });
+  elements.categoryPickGrid.append(...chips);
+}
+
+function syncCategoryPickerSelection() {
+  elements.categoryPickGrid.querySelectorAll(".category-chip").forEach((chip) => {
+    const active = chip.dataset.category === selectedCategory;
+    chip.classList.toggle("is-selected", active);
+    chip.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function selectCategoryChip(preset) {
+  selectedCategory = selectedCategory === preset ? null : preset;
+  elements.categoryPickCustom.value = "";
+  elements.categoryPickError.textContent = "";
+  syncCategoryPickerSelection();
+}
+
+function transactionSummaryText(fields = {}) {
+  const typeLabel = fields.transaction_type === "income"
+    ? "Pemasukan"
+    : fields.transaction_type === "expense"
+      ? "Pengeluaran"
+      : "";
+  const parts = [
+    typeLabel,
+    Number(fields.total_price) > 0 ? formatRupiah(fields.total_price) : "",
+    fields.item_name || "",
+    fields.merchant_name ? `Belanja di ${fields.merchant_name}` : "",
+  ];
+  return parts.filter(Boolean).join(" · ") || "Transaksi baru";
+}
+
+function askCategory({ summary, current = null } = {}) {
+  if (categoryPickResolver) resolveCategoryPicker(categoryPickKeep);
+  const isPreset = CATEGORY_PRESETS.includes(current);
+  selectedCategory = isPreset ? current : null;
+  elements.categoryPickCustom.value = current && !isPreset ? String(current) : "";
+  categoryPickKeep = normalizeCategory(current) ?? UNCATEGORIZED;
+  elements.categoryPickError.textContent = "";
+  elements.categoryPickSummary.textContent = summary || "Transaksi baru";
+  syncCategoryPickerSelection();
+  showDialog(elements.categoryPickDialog);
+  return new Promise((resolve) => {
+    categoryPickResolver = resolve;
+  });
+}
+
+function resolveCategoryPicker(value) {
+  const resolve = categoryPickResolver;
+  categoryPickResolver = null;
+  closeDialog(elements.categoryPickDialog);
+  resolve?.(value);
+}
+
+buildCategoryPicker();
+
+elements.categoryPickCustom.addEventListener("input", () => {
+  elements.categoryPickError.textContent = "";
+  if (elements.categoryPickCustom.value.trim()) {
+    selectedCategory = null;
+    syncCategoryPickerSelection();
+  }
+});
+
+elements.categoryPickConfirm.addEventListener("click", () => {
+  const category = categoryFromChoice(selectedCategory, elements.categoryPickCustom.value);
+  if (!category) {
+    elements.categoryPickError.textContent = "Pilih satu kategori atau tekan Lewati.";
+    return;
+  }
+  resolveCategoryPicker(category);
+});
+
+elements.categoryPickSkip.addEventListener("click", () => resolveCategoryPicker(categoryPickKeep));
+
+elements.categoryPickDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  resolveCategoryPicker(categoryPickKeep);
+});
+
+function buildConfirmCategoryPicker() {
+  const chips = CATEGORY_PRESETS.map((preset) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "category-chip";
+    chip.dataset.category = preset;
+    chip.textContent = categoryPresentation(preset);
+    chip.setAttribute("aria-pressed", "false");
+    chip.addEventListener("click", () => selectConfirmCategoryChip(preset));
+    return chip;
+  });
+  elements.confirmCategoryGrid.append(...chips);
+}
+
+function syncConfirmCategoryPickerSelection() {
+  elements.confirmCategoryGrid.querySelectorAll(".category-chip").forEach((chip) => {
+    const active = chip.dataset.category === confirmCategorySelected;
+    chip.classList.toggle("is-selected", active);
+    chip.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function selectConfirmCategoryChip(preset) {
+  confirmCategorySelected = confirmCategorySelected === preset ? null : preset;
+  elements.confirmCategoryCustom.value = "";
+  elements.confirmError.textContent = "";
+  syncConfirmCategoryPickerSelection();
+}
+
+function buildManualCategoryPicker() {
+  const chips = CATEGORY_PRESETS.map((preset) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "category-chip";
+    chip.dataset.category = preset;
+    chip.textContent = categoryPresentation(preset);
+    chip.setAttribute("aria-pressed", "false");
+    chip.addEventListener("click", () => selectManualCategoryChip(preset));
+    return chip;
+  });
+  elements.manualCategoryGrid.append(...chips);
+}
+
+function syncManualCategoryPickerSelection() {
+  elements.manualCategoryGrid.querySelectorAll(".category-chip").forEach((chip) => {
+    const active = chip.dataset.category === manualCategorySelected;
+    chip.classList.toggle("is-selected", active);
+    chip.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function selectManualCategoryChip(preset) {
+  manualCategorySelected = manualCategorySelected === preset ? null : preset;
+  elements.manualCategoryCustom.value = "";
+  syncManualCategoryPickerSelection();
+}
+
+function isValidDateString(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const [year, month, day] = String(value).split("-").map(Number);
+  const parsed = new Date(year, month - 1, day, 12);
+  return parsed.getFullYear() === year
+    && parsed.getMonth() === month - 1
+    && parsed.getDate() === day;
+}
+
+// Nominal dibatasi maksimal 15 digit dan diformat dengan pemisah ribuan
+// Indonesia (titik) agar mudah dibaca di dialog konfirmasi.
+function formatNumberInput(value) {
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 15);
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function rawDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function readConfirmFields() {
+  return {
+    transaction_type: elements.confirmType.value,
+    date: elements.confirmDate.value,
+    total_price: rawDigits(elements.confirmTotalPrice.value),
+    item_name: elements.confirmItemName.value.trim(),
+    quantity: elements.confirmQuantity.value,
+    unit: elements.confirmUnit.value.trim(),
+    note: elements.confirmNote.value,
+  };
+}
+
+function validateConfirmFields(fields) {
+  if (!["income", "expense"].includes(fields.transaction_type)) {
+    return "Jenis transaksi harus pemasukan atau pengeluaran.";
+  }
+  if (!isValidDateString(fields.date)) {
+    return "Tanggal transaksi wajib diisi dengan benar.";
+  }
+  const nominal = Number(fields.total_price);
+  if (!Number.isFinite(nominal) || nominal <= 0) {
+    const lacksExplicitPrice = pendingConfirmation?.source === "text"
+      || pendingConfirmation?.source === "voice";
+    return lacksExplicitPrice
+      ? "Nominal tidak terbaca dari input. Isi nominal sebelum transaksi disimpan."
+      : "Nominal wajib diisi dan harus lebih besar dari nol.";
+  }
+  return null;
+}
+
+function setConfirmSaving(saving) {
+  confirmSaving = saving;
+  const submit = elements.confirmForm.querySelector(".button-primary");
+  submit.disabled = saving;
+  submit.classList.toggle("is-loading", saving);
+  elements.confirmSkipButton.disabled = saving;
+  elements.closeConfirmButton.disabled = saving;
+  elements.confirmCancelButton.disabled = saving;
+  elements.confirmForm.querySelectorAll("input, select, textarea").forEach((field) => {
+    field.disabled = saving;
+  });
+}
+
+function openTransactionConfirmation({
+  source,
+  response = null,
+  originalText = "",
+  fields = {},
+  category = null,
+  editingId = null,
+  snapshot = null,
+}) {
+  pendingConfirmation = { source, response, originalText, editingId, snapshot };
+  const data = fields;
+  elements.confirmType.value = ["income", "expense"].includes(data.transaction_type)
+    ? data.transaction_type
+    : "income";
+  elements.confirmDate.value = data.date || getLocalReferenceDate();
+  const hasPrice = Number(data.total_price) > 0;
+  elements.confirmTotalPrice.value = hasPrice
+    ? formatNumberInput(String(Math.round(Number(data.total_price))))
+    : "";
+  elements.confirmPriceWarning.hidden = hasPrice;
+  elements.confirmItemName.value = data.item_name ?? "";
+  elements.confirmQuantity.value = data.quantity ?? "";
+  elements.confirmUnit.value = data.unit ?? "";
+  elements.confirmNote.value = data.note ?? "";
+  const isEditableManual = source === "manual" || source === "edit";
+  elements.confirmNoteField.hidden = !isEditableManual;
+  const original = source === "text" || source === "voice"
+    ? (originalText || response?.transcript || "")
+    : "";
+  elements.confirmSource.hidden = !original;
+  elements.confirmSource.textContent = original ? `Input asli: “${original}”` : "";
+
+  const isPreset = CATEGORY_PRESETS.includes(category);
+  confirmCategorySelected = isPreset ? category : null;
+  elements.confirmCategoryCustom.value = category && !isPreset ? String(category) : "";
+  confirmCategoryKeep = normalizeCategory(category) ?? UNCATEGORIZED;
+  syncConfirmCategoryPickerSelection();
+  elements.confirmError.textContent = "";
+  setConfirmSaving(false);
+  showDialog(elements.confirmDialog);
+}
+
+function closeTransactionConfirmation() {
+  pendingConfirmation = null;
+  closeDialog(elements.confirmDialog);
+}
+
+function cancelTransactionConfirmation() {
+  const pending = pendingConfirmation;
+  if (!pending) return;
+  closeTransactionConfirmation();
+  // Teks/suara: hasil batal tanpa menyimpan apa pun. Manual/edit: buka kembali
+  // form dengan data yang sudah diketik agar tidak hilang.
+  if (pending.source === "manual" || pending.source === "edit") {
+    restoreTransactionForm(pending.snapshot || {}, pending.editingId);
+  }
+}
+
+async function commitConfirmedTransaction(category) {
+  if (confirmSaving || !pendingConfirmation) return;
+  const pending = pendingConfirmation;
+  const fields = readConfirmFields();
+  const validationError = validateConfirmFields(fields);
+  if (validationError) {
+    elements.confirmError.textContent = validationError;
+    return;
+  }
+
+  setConfirmSaving(true);
+  const previousHistory = [...history];
+  try {
+    let saved;
+    const action = pending.source === "edit" ? "diperbarui" : "disimpan";
+    if (pending.source === "text" || pending.source === "voice") {
+      const data = { ...(pending.response?.data || {}), ...fields };
+      const editedResponse = { ...pending.response, data };
+      const local = recordSuccessfulResponse(
+        editedResponse,
+        pending.source,
+        pending.originalText,
+        { category },
+      );
+      saved = await persistCreatedRecord(local, previousHistory);
+    } else if (pending.source === "edit") {
+      const input = { ...fields, category };
+      const local = updateTransaction(pending.editingId, input);
+      saved = local;
+      if (databaseEnabled) {
+        try {
+          const record = await updateTransactionRemote(pending.editingId, input);
+          const nextHistory = local.history.map((item) => (
+            item.id === pending.editingId ? record : item
+          ));
+          saved = { record, history: saveHistory(nextHistory) };
+        } catch (error) {
+          saveHistory(previousHistory);
+          throw error;
+        }
+      } else {
+        saveHistory(previousHistory);
+        throw new ApiError("Database Supabase belum siap. Transaksi tidak disimpan.", 503);
+      }
+    } else {
+      const local = createManualTransaction({ ...fields, category });
+      saved = await persistCreatedRecord(local, previousHistory);
+    }
+
+    history = saved.history;
+    renderResult(saved.record);
+    closeTransactionConfirmation();
+    renderAll();
+    setStatus(
+      databaseEnabled
+        ? `Transaksi berhasil ${action} ke Supabase.`
+        : `Transaksi berhasil ${action} pada perangkat ini.`,
+      "success",
+    );
+    if (pending.source === "edit") showActionPopup("Perubahan transaksi berhasil disimpan.");
+    if (pending.source === "voice") {
+      elements.voiceStatus.textContent = pending.response?.transcript
+        ? `Transkrip: ${pending.response.transcript}`
+        : "Transaksi suara berhasil diproses.";
+    }
+  } catch (error) {
+    setConfirmSaving(false);
+    if (error instanceof ApiError && error.status === 401) {
+      showAuthentication();
+      setAuthStatus("Sesi telah berakhir. Silakan login kembali.", "error");
+    }
+    elements.confirmError.textContent = error.message || "Transaksi tidak dapat disimpan.";
+  }
+}
+
+buildConfirmCategoryPicker();
+buildManualCategoryPicker();
+
+elements.confirmCategoryCustom.addEventListener("input", () => {
+  elements.confirmError.textContent = "";
+  if (elements.confirmCategoryCustom.value.trim()) {
+    confirmCategorySelected = null;
+    syncConfirmCategoryPickerSelection();
+  }
+});
+
+elements.confirmTotalPrice.addEventListener("input", () => {
+  // Simpan kembali format titik ribuan dan sembunyikan peringatan saat terisi.
+  const digits = rawDigits(elements.confirmTotalPrice.value);
+  elements.confirmTotalPrice.value = formatNumberInput(digits);
+  elements.confirmPriceWarning.hidden = Number(digits || 0) > 0;
+});
+
+elements.manualCategoryCustom.addEventListener("input", () => {
+  if (elements.manualCategoryCustom.value.trim()) {
+    manualCategorySelected = null;
+    syncManualCategoryPickerSelection();
+  }
+});
+
+elements.closeConfirmButton.addEventListener("click", cancelTransactionConfirmation);
+elements.confirmCancelButton.addEventListener("click", cancelTransactionConfirmation);
+elements.confirmDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  cancelTransactionConfirmation();
+});
+
+elements.confirmSkipButton.addEventListener("click", () => {
+  if (!confirmSaving) commitConfirmedTransaction(confirmCategoryKeep);
+});
+
+elements.confirmForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (confirmSaving) return;
+  const category = categoryFromChoice(confirmCategorySelected, elements.confirmCategoryCustom.value);
+  if (!category) {
+    elements.confirmError.textContent = "Pilih satu kategori atau tekan Lewati kategori.";
+    return;
+  }
+  await commitConfirmedTransaction(category);
+});
+
 let history = [];
 let databaseEnabled = false;
 let currentUser = null;
@@ -475,8 +942,13 @@ function renderHistory(transactions) {
     elements.emptyHistoryTitle.textContent = "Belum ada transaksi";
     elements.emptyHistoryDescription.textContent = "Tambahkan transaksi melalui teks, suara, Foto nota, atau form manual.";
   } else if (transactions.length === 0) {
-    elements.emptyHistoryTitle.textContent = "Tidak ada transaksi pada periode ini";
-    elements.emptyHistoryDescription.textContent = "Ubah filter periode atau pilih Semua untuk melihat riwayat lainnya.";
+    const category = elements.categoryFilter.value;
+    elements.emptyHistoryTitle.textContent = category
+      ? "Tidak ada transaksi pada kategori ini"
+      : "Tidak ada transaksi pada periode ini";
+    elements.emptyHistoryDescription.textContent = category
+      ? "Pilih kategori lain atau tekan Semua untuk melihat riwayat lainnya."
+      : "Ubah filter periode atau pilih Semua untuk melihat riwayat lainnya.";
   }
 
   transactions.forEach((transaction) => {
@@ -495,7 +967,10 @@ function renderHistory(transactions) {
     const meta = document.createElement("span");
     const view = presentTransaction(transaction, getLocalReferenceDate());
     meta.textContent = `${view.date} · ${view.source}`;
-    main.append(title, meta);
+    const category = document.createElement("span");
+    category.className = "history-category";
+    category.textContent = view.category;
+    main.append(title, meta, category);
 
     const amount = document.createElement("strong");
     amount.className = "history-amount";
@@ -582,15 +1057,62 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") hideChartTooltip(true);
 });
 
+function refreshCategoryFilter() {
+  const current = elements.categoryFilter.value;
+  const labels = [...new Set(
+    history.map((transaction) => categoryLabel(transaction.category)),
+  )].sort((left, right) => left.localeCompare(right, "id"));
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "Semua kategori";
+  const options = [allOption, ...labels.map((label) => {
+    const option = document.createElement("option");
+    // value tetap nama polos agar filter mencocokkan data tersimpan, teks
+    // hanya menampilkan logo agar pilihan mudah dibedakan.
+    option.value = label;
+    option.textContent = categoryPresentation(label);
+    return option;
+  })];
+  elements.categoryFilter.replaceChildren(...options);
+  elements.categoryFilter.value = labels.includes(current) ? current : "";
+}
+
+function renderCategorySummary(transactions, periodLabel) {
+  const rows = summarizeCategories(transactions);
+  elements.categorySummaryList.replaceChildren();
+  elements.categorySummary.hidden = rows.length === 0;
+  elements.categorySummaryPeriod.textContent = periodLabel;
+  rows.forEach((row) => {
+    const item = document.createElement("li");
+    item.className = `category-summary-row type-${row.transaction_type}`;
+    const label = document.createElement("span");
+    label.className = "category-summary-label";
+    label.textContent = categoryPresentation(row.label);
+    const count = document.createElement("span");
+    count.className = "category-summary-count";
+    count.textContent = `${row.count} transaksi`;
+    const amount = document.createElement("strong");
+    amount.className = "category-summary-amount";
+    const sign = row.transaction_type === "income" ? "+" : "−";
+    amount.textContent = `${sign}${formatRupiah(row.total)}`;
+    item.append(label, count, amount);
+    elements.categorySummaryList.append(item);
+  });
+}
+
 function renderFilteredViews() {
   try {
+    refreshCategoryFilter();
     const result = filterTransactionsByPeriod(history, readPeriodSelection());
+    const category = elements.categoryFilter.value;
+    const visible = filterTransactionsByCategory(result.transactions, category);
     elements.filterError.textContent = "";
-    elements.activePeriod.textContent = `Menampilkan ${result.bounds.label.toLocaleLowerCase("id-ID")} (${result.transactions.length} transaksi).`;
+    elements.activePeriod.textContent = `Menampilkan ${result.bounds.label.toLocaleLowerCase("id-ID")}${category ? ` · kategori ${categoryPresentation(category)}` : ""} (${visible.length} transaksi).`;
     elements.summaryPeriodLabel.textContent = result.bounds.label;
-    renderSummary(result.transactions);
-    renderHistory(result.transactions);
-    renderChart(result.transactions, result.bounds);
+    renderSummary(visible);
+    renderHistory(visible);
+    renderChart(visible, result.bounds);
+    renderCategorySummary(result.transactions, result.bounds.label);
   } catch (error) {
     elements.filterError.textContent = error.message;
   }
@@ -615,6 +1137,7 @@ function renderResult(record) {
   elements.resultType.className = `type-pill type-${record.transaction_type}`;
   elements.resultPrice.textContent = view.price;
   elements.resultDate.textContent = view.date;
+  elements.resultCategory.textContent = view.category;
   elements.resultItem.textContent = view.item;
   elements.resultQuantity.textContent = view.quantity;
   elements.resultUnit.textContent = view.unit;
@@ -638,21 +1161,6 @@ async function persistCreatedRecord(saved, previousHistory) {
     saveHistory(previousHistory);
     throw error;
   }
-}
-
-async function acceptSuccess(response, source, originalText) {
-  const previousHistory = [...history];
-  const local = recordSuccessfulResponse(response, source, originalText);
-  const saved = await persistCreatedRecord(local, previousHistory);
-  history = saved.history;
-  renderResult(saved.record);
-  renderAll();
-  setStatus(
-    databaseEnabled
-      ? "Transaksi berhasil disimpan ke Supabase."
-      : "Transaksi berhasil dicatat pada perangkat ini.",
-    "success",
-  );
 }
 
 function humanizeError(error, mode = "text") {
@@ -683,9 +1191,15 @@ elements.textForm.addEventListener("submit", async (event) => {
     setStatus("Sedang memproses kalimat transaksi…");
     try {
       const response = await extractText(text);
-      await acceptSuccess(response, "text", response.input || text);
       elements.textInput.value = "";
       elements.characterCount.textContent = "0";
+      setStatus("Periksa dan konfirmasi data transaksi sebelum disimpan.");
+      openTransactionConfirmation({
+        source: "text",
+        response,
+        originalText: response.input || text,
+        fields: response.data,
+      });
     } catch (error) {
       setStatus(humanizeError(error), "error");
     } finally {
@@ -1017,9 +1531,19 @@ elements.receiptConfirmForm.addEventListener("submit", async (event) => {
   }
   try {
     const previousHistory = [...history];
+    const items = collectReceiptEditorItems();
+    const itemsTotal = items.reduce((sum, item) => sum + (item.line_total || 0), 0);
+    const category = await askCategory({
+      summary: transactionSummaryText({
+        transaction_type: "expense",
+        total_price: itemsTotal,
+        merchant_name: pendingReceipt.data.receipt?.merchant_name,
+      }),
+    });
     const local = createReceiptTransaction(pendingReceipt, {
       date: elements.receiptConfirmDate.value,
-      items: collectReceiptEditorItems(),
+      items,
+      category,
     });
     const saved = await persistCreatedRecord(local, previousHistory);
     history = saved.history;
@@ -1058,10 +1582,14 @@ async function stopAndUploadRecording() {
   elements.voiceStatus.textContent = "Audio sedang diproses…";
   setStatus("Mengunggah dan memproses suara…");
   const response = await extractAudio(blob);
-  await acceptSuccess(response, "voice", response.transcript || "");
-  elements.voiceStatus.textContent = response.transcript
-    ? `Transkrip: ${response.transcript}`
-    : "Transaksi suara berhasil diproses.";
+  elements.voiceStatus.textContent = "Transkrip sudah diproses. Periksa dialog konfirmasi sebelum transaksi disimpan.";
+  setStatus("Periksa dan konfirmasi data transaksi sebelum disimpan.");
+  openTransactionConfirmation({
+    source: "voice",
+    response,
+    originalText: response.transcript || "",
+    fields: response.data,
+  });
 }
 
 elements.recordButton.addEventListener("click", async () => {
@@ -1170,6 +1698,7 @@ function openTransactionDetail(id) {
   elements.detailType.textContent = view.type;
   elements.detailPrice.textContent = view.price;
   elements.detailDate.textContent = view.date;
+  elements.detailCategory.textContent = view.category;
   elements.detailItem.textContent = view.item;
   elements.detailQuantity.textContent = view.quantity;
   elements.detailUnit.textContent = view.unit;
@@ -1206,21 +1735,45 @@ elements.detailDialog.addEventListener("cancel", (event) => {
   closeTransactionDetail();
 });
 
-function openTransactionForm(record = null) {
-  editingTransactionId = record?.id || null;
+function restoreTransactionForm(snapshot = {}, editingId = null) {
+  editingTransactionId = editingId;
   elements.manualTransactionForm.reset();
   elements.manualFormError.textContent = "";
-  elements.transactionFormTitle.textContent = record ? "Edit transaksi" : "Tambah transaksi manual";
-  elements.manualTransactionType.value = ["income", "expense"].includes(record?.transaction_type)
-    ? record.transaction_type
+  elements.transactionFormTitle.textContent = editingId ? "Edit transaksi" : "Tambah transaksi manual";
+  elements.manualTransactionType.value = ["income", "expense"].includes(snapshot.transaction_type)
+    ? snapshot.transaction_type
     : "income";
-  elements.manualDate.value = record?.date || getLocalReferenceDate();
-  elements.manualTotalPrice.value = record?.total_price ?? "";
-  elements.manualItemName.value = record?.item_name ?? "";
-  elements.manualQuantity.value = record?.quantity ?? "";
-  elements.manualUnit.value = record?.unit ?? "";
-  elements.manualNote.value = record?.note ?? "";
+  elements.manualDate.value = snapshot.date || getLocalReferenceDate();
+  elements.manualTotalPrice.value = snapshot.total_price ?? "";
+  elements.manualItemName.value = snapshot.item_name ?? "";
+  elements.manualQuantity.value = snapshot.quantity ?? "";
+  elements.manualUnit.value = snapshot.unit ?? "";
+  elements.manualNote.value = snapshot.note ?? "";
+  const selectedPreset = CATEGORY_PRESETS.includes(snapshot.category)
+    ? snapshot.category
+    : null;
+  manualCategorySelected = selectedPreset;
+  elements.manualCategoryCustom.value = snapshot.category && !selectedPreset
+    ? String(snapshot.category)
+    : "";
+  syncManualCategoryPickerSelection();
   showDialog(elements.transactionFormDialog);
+}
+
+function openTransactionForm(record = null) {
+  restoreTransactionForm(
+    {
+      transaction_type: record?.transaction_type,
+      date: record?.date,
+      total_price: record?.total_price ?? "",
+      item_name: record?.item_name ?? "",
+      quantity: record?.quantity ?? "",
+      unit: record?.unit ?? "",
+      note: record?.note ?? "",
+      category: record?.category ?? null,
+    },
+    record?.id || null,
+  );
 }
 
 function closeTransactionForm() {
@@ -1262,50 +1815,29 @@ elements.deleteTransactionButton.addEventListener("click", async () => {
 
 elements.manualTransactionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const isEditing = Boolean(editingTransactionId);
-  const input = {
+  const editingId = editingTransactionId;
+  const formCategory = categoryFromChoice(
+    manualCategorySelected,
+    elements.manualCategoryCustom.value,
+  );
+  const snapshot = {
     transaction_type: elements.manualTransactionType.value,
     date: elements.manualDate.value,
     total_price: elements.manualTotalPrice.value,
-    item_name: elements.manualItemName.value,
+    item_name: elements.manualItemName.value.trim(),
     quantity: elements.manualQuantity.value,
-    unit: elements.manualUnit.value,
+    unit: elements.manualUnit.value.trim(),
     note: elements.manualNote.value,
+    category: formCategory,
   };
-
-  try {
-    const previousHistory = [...history];
-    const local = editingTransactionId
-      ? updateTransaction(editingTransactionId, input)
-      : createManualTransaction(input);
-    const action = isEditing ? "diperbarui" : "ditambahkan";
-    let saved = local;
-    if (databaseEnabled && editingTransactionId) {
-      try {
-        const record = await updateTransactionRemote(editingTransactionId, input);
-        const nextHistory = local.history.map((item) => (
-          item.id === editingTransactionId ? record : item
-        ));
-        saved = { record, history: saveHistory(nextHistory) };
-      } catch (error) {
-        saveHistory(previousHistory);
-        throw error;
-      }
-    } else if (databaseEnabled) {
-      saved = await persistCreatedRecord(local, previousHistory);
-    } else {
-      saveHistory(previousHistory);
-      throw new ApiError("Database Supabase belum siap. Transaksi tidak disimpan.", 503);
-    }
-    history = saved.history;
-    renderResult(saved.record);
-    closeTransactionForm();
-    renderAll();
-    setStatus(`Transaksi berhasil ${action}.`, "success");
-    if (isEditing) showActionPopup("Perubahan transaksi berhasil disimpan.");
-  } catch (error) {
-    elements.manualFormError.textContent = error.message;
-  }
+  closeTransactionForm();
+  openTransactionConfirmation({
+    source: editingId ? "edit" : "manual",
+    editingId,
+    snapshot,
+    fields: snapshot,
+    category: formCategory,
+  });
 });
 
 function updateFilterFields() {
@@ -1323,6 +1855,7 @@ function updateFilterFields() {
   elements.yearFilterValue,
   elements.customStartDate,
   elements.customEndDate,
+  elements.categoryFilter,
 ].forEach((control) => {
   control.addEventListener("change", () => {
     updateFilterFields();
@@ -1332,6 +1865,7 @@ function updateFilterFields() {
 
 elements.resetFilterButton.addEventListener("click", () => {
   elements.periodMode.value = "all";
+  elements.categoryFilter.value = "";
   updateFilterFields();
   renderFilteredViews();
 });

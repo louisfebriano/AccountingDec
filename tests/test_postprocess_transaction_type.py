@@ -3,6 +3,7 @@ import unittest
 from datetime import date
 
 from src.postprocess import parse_and_validate
+from src.transaction_type import classify_transaction_type
 
 
 class PostprocessTransactionTypeTests(unittest.TestCase):
@@ -276,6 +277,107 @@ class PostprocessTransactionTypeTests(unittest.TestCase):
                 self.assertEqual(result["data"]["quantity"], quantity)
                 self.assertEqual(result["data"]["unit"], unit)
 
+    def test_restock_sentence_with_totalnya_pattern_is_grounded_and_priced(self):
+        raw_output = json.dumps(
+            {
+                "item_name": "Bakso",
+                "quantity": 3,
+                "unit": "bungkus",
+                "total_price": 60000,
+                "date": None,
+            }
+        )
+
+        result = parse_and_validate(
+            raw_output,
+            user_input="Kemarin stok bakso 3 bungkus totalnya 60rb",
+            reference_date=date(2026, 8, 24),
+            transaction_type="expense",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["item_name"], "Bakso")
+        self.assertEqual(result["data"]["quantity"], 3)
+        self.assertEqual(result["data"]["unit"], "bungkus")
+        self.assertEqual(result["data"]["total_price"], 60000)
+        self.assertEqual(result["data"]["date"], "2026-08-23")
+
+    def test_casual_restock_variations_are_detected_and_grounded(self):
+        # Variasi kasual "stok <barang> <jumlah> <satuan> totalnya <harga>".
+        # Keluaran model sengaja dibuat salah (quantity=1, unit=pcs, price=99999)
+        # untuk membuktikan deteksi dan nilai akhir tidak bergantung pada tebakan
+        # model: klasifikasi, harga, tanggal, jumlah, dan satuan semuanya
+        # deterministik dari kalimat asli.
+        variants = (
+            (
+                "barusan stok telur 10kg 120rb",
+                "Telur", 10, "kg", 120000, "2026-08-24",
+            ),
+            (
+                "kmrn stok gas 2 tabung totalnya 90rb",
+                "Gas", 2, "tabung", 90000, "2026-08-23",
+            ),
+            (
+                "tadi stok ayam 5kg abis 55rb",
+                "Ayam", 5, "kg", 55000, "2026-08-24",
+            ),
+            (
+                "ngisi stok bakso 3 bungkus totalnya 60rb",
+                "Bakso", 3, "bungkus", 60000, "2026-08-24",
+            ),
+            (
+                "kemarin stok minyak goreng 5ltr 60rb",
+                "Minyak goreng", 5, "liter", 60000, "2026-08-23",
+            ),
+            (
+                "stok saus sambal 15btl 75rb tadi sore",
+                "Saus sambal", 15, "botol", 75000, "2026-08-24",
+            ),
+            (
+                "beli stok terigu 5kg totalnya 45rb kemarin",
+                "Terigu", 5, "kg", 45000, "2026-08-23",
+            ),
+            (
+                "ambil stok beras 2 karung seharga 200rb",
+                "Beras", 2, "karung", 200000, "2026-08-24",
+            ),
+            (
+                "tadi pagi stok kopi 2krg 160rb",
+                "Kopi", 2, "karung", 160000, "2026-08-24",
+            ),
+            (
+                "stok gula pasir 2 karung seharga 150k kemarin",
+                "Gula pasir", 2, "karung", 150000, "2026-08-23",
+            ),
+        )
+
+        for text, item, quantity, unit, price, expected_date in variants:
+            with self.subTest(text=text):
+                self.assertEqual(classify_transaction_type(text), "expense")
+
+                raw_output = json.dumps(
+                    {
+                        "item_name": item,
+                        "quantity": 1,
+                        "unit": "pcs",
+                        "total_price": 99999,
+                        "date": None,
+                    }
+                )
+                result = parse_and_validate(
+                    raw_output,
+                    user_input=text,
+                    reference_date=date(2026, 8, 24),
+                    transaction_type="expense",
+                )
+
+                self.assertTrue(result["success"])
+                self.assertEqual(result["data"]["item_name"], item)
+                self.assertEqual(result["data"]["quantity"], quantity)
+                self.assertEqual(result["data"]["unit"], unit)
+                self.assertEqual(result["data"]["total_price"], price)
+                self.assertEqual(result["data"]["date"], expected_date)
+
     def test_outer_package_is_selected_in_both_word_orders(self):
         cases = (
             ("beli kecap 2dus isi 24btl 130rb", 2, "dus"),
@@ -338,6 +440,52 @@ class PostprocessTransactionTypeTests(unittest.TestCase):
         self.assertEqual(result["data"]["unit"], "kg")
         self.assertEqual(result["data"]["total_price"], 50000)
         self.assertEqual(result["data"]["date"], "2026-08-29")
+
+    def test_unstated_price_is_not_invented_by_model(self):
+        raw_output = json.dumps(
+            {
+                "item_name": "Terigu",
+                "quantity": 5,
+                "unit": "kg",
+                "total_price": 15000,
+                "date": None,
+            }
+        )
+
+        result = parse_and_validate(
+            raw_output,
+            user_input="beli terigu 5kg",
+            reference_date=date(2026, 8, 24),
+            transaction_type="expense",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["item_name"], "Terigu")
+        self.assertEqual(result["data"]["quantity"], 5)
+        self.assertEqual(result["data"]["unit"], "kg")
+        # Harga tebakan model tidak dapat ditelusuri ke kalimat pengguna, jadi
+        # nominal dibiarkan kosong sampai pengguna mengisinya di popup konfirmasi.
+        self.assertIsNone(result["data"]["total_price"])
+
+    def test_explicit_price_still_overrides_model_value(self):
+        raw_output = json.dumps(
+            {
+                "item_name": "Tepung terigu",
+                "quantity": 5,
+                "unit": "kg",
+                "total_price": 999999,
+                "date": None,
+            }
+        )
+
+        result = parse_and_validate(
+            raw_output,
+            user_input="beli terigu 5kg total 150rb",
+            reference_date=date(2026, 8, 24),
+            transaction_type="expense",
+        )
+
+        self.assertEqual(result["data"]["total_price"], 150000)
 
 
 if __name__ == "__main__":

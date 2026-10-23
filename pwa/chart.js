@@ -1,5 +1,5 @@
-import { formatCompactRupiah, formatRupiah } from "./formatters.js?v=16";
-import { localDateKey } from "./filters.js?v=16";
+import { formatCompactRupiah, formatRupiah } from "./formatters.js?v=17";
+import { localDateKey } from "./filters.js?v=17";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

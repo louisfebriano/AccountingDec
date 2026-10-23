@@ -1,3 +1,5 @@
+import { UNCATEGORIZED, normalizeCategory } from "./categories.js?v=3";
+
 export const HISTORY_KEY = "catatkas.transactions.v1";
 const LEGACY_HISTORY_KEY = "accountingdec.transactions.v1";
 const USER_HISTORY_PREFIX = "catatkas.transactions.v2";
@@ -131,6 +133,7 @@ function normalizeStoredRecord(value, index, now) {
     transcript: source === "voice" ? nullableText(value.transcript) || legacyInput : null,
     normalized_text: source === "voice" ? nullableText(value.normalized_text) : null,
     note: nullableText(value.note) || (source === "manual" ? legacyInput : null),
+    category: normalizeCategory(value.category),
     reference_date: validDate(value.reference_date) ? value.reference_date : null,
     extraction_method: nullableText(value.extraction_method),
     receipt: source === "receipt" ? normalizeReceipt(value.receipt, value.total_price) : null,
@@ -204,6 +207,7 @@ export function validateEditableTransaction(input) {
     total_price: nullablePositiveNumber(input.total_price, "Nominal"),
     date: input.date,
     note: nullableText(input.note),
+    category: normalizeCategory(input.category),
   };
 }
 
@@ -265,6 +269,8 @@ export function recordSuccessfulResponse(response, source, originalText, options
   const now = options.now || new Date();
   const data = response.data;
   const isVoice = source === "voice";
+  // Pilihan popup kategori (options.category) menimpa data hasil ekstraksi.
+  const chosenCategory = normalizeCategory(options.category ?? data.category) ?? UNCATEGORIZED;
   const record = {
     id: options.idFactory?.() || newRecordId(now),
     user_id: activeUserId,
@@ -277,8 +283,13 @@ export function recordSuccessfulResponse(response, source, originalText, options
     note: null,
     receipt: null,
     item_name: nullableText(data.item_name),
-    quantity: data.quantity ?? null,
+    // Field quantity dari dialog konfirmasi berupa string; "" harus menjadi
+    // null agar backend tidak menolaknya sebagai decimal yang tidak valid.
+    quantity: data.quantity === "" || data.quantity === undefined || data.quantity === null
+      ? null
+      : data.quantity,
     unit: nullableText(data.unit),
+    category: chosenCategory,
     total_price: Number(data.total_price),
     date: validDate(data.date) ? data.date : null,
     transaction_type: ["income", "expense", "unknown"].includes(data.transaction_type)
@@ -318,6 +329,7 @@ export function createReceiptTransaction(response, confirmation, options = {}) {
     quantity: items.length === 1 ? items[0].quantity : null,
     unit: items.length === 1 ? items[0].unit : null,
     note: null,
+    category: confirmation.category || UNCATEGORIZED,
   });
   const receipt = {
     merchant_name: nullableText(response.data.receipt.merchant_name),
