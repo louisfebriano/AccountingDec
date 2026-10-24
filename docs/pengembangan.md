@@ -93,6 +93,35 @@ Nilai produksi selalu ditimpa oleh classifier aturan. Adapter tetap dilatih
 menghasilkan `transaction_type` agar keluaran mentah dapat dievaluasi, tetapi
 tebakan model tidak dipercaya.
 
+### Kata kerja arus kas
+
+Pemilik usaha mencatat arus kasnya sendiri, sehingga kata kerja arus kas sudah
+cukup menentukan arah walaupun nominal berada di antara kata kerja dan objek:
+
+```text
+masuk 300rb dari pelanggan          -> income
+dapet 150rb kemarin                 -> income
+terima pesanan 10 kotak kue 250rb   -> income
+tadi ada yang order 2 gelas es teh  -> income
+keluar 25 ribu tadi pagi            -> expense
+bayar 75rb buat listrik             -> expense
+bayar wifi 300rb                    -> expense
+```
+
+Nominal wajib mengikuti kata kerja arus kas agar kuantitas tidak salah dibaca
+sebagai uang. `Stok masuk 10 karung` tetap `expense` karena `10 karung` bukan
+nominal, dan `Barang keluar gudang` tetap `unknown` karena tidak ada nominal.
+Pesanan yang dibuat pemilik ke supplier (`Saya order bahan 200rb`) juga tidak
+dianggap pemasukan; hanya pesanan yang datang ke usaha yang dihitung.
+
+Kata `bayar` pada pembayaran pelanggan tetap `income` karena aturan pelaku
+diperiksa lebih dulu:
+
+```text
+Pelanggan bayar pesanan 150rb  -> income
+Saya bayar listrik 300rb       -> expense
+```
+
 ## 4. Kontrak enam field transaksi
 
 ```json
@@ -458,7 +487,9 @@ periode, detail transaksi, dan agregasi grafik.
 - Belum ada multi-transaksi dalam satu input.
 - PWA tidak menjalankan inferensi offline.
 - Normalisasi bilangan belum mencakup desimal lisan seperti “dua koma lima”.
-- Kata `bayar`, `transfer`, `masuk`, dan `keluar` memerlukan konteks yang jelas.
+- Kata `masuk` dan `keluar` yang diikuti nominal dibaca sebagai pemasukan dan
+  pengeluaran; `transfer` serta `bayar` tanpa pelaku atau tujuan biaya yang
+  jelas tetap dianggap ambigu.
 - Modal, pinjaman, pengembalian dana, dan multi-transaksi belum diklasifikasikan
   otomatis bila arahnya tidak jelas.
 - Koreksi typo Llama bersifat best-effort; pengguna tetap harus memeriksa hasil.

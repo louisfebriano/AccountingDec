@@ -168,6 +168,31 @@ class PostprocessTransactionTypeTests(unittest.TestCase):
         self.assertEqual(result["data"]["quantity"], 2)
         self.assertEqual(result["data"]["unit"], "karung")
 
+    def test_generic_word_is_not_stored_as_item_name(self):
+        # "dagangan" hanya kata umum, bukan nama barang. Nominal tetap disimpan
+        # agar pengguna hanya perlu memilih/menulis nama barang di konfirmasi.
+        raw_output = json.dumps(
+            {
+                "item_name": "Dagangan",
+                "quantity": 50,
+                "unit": "karung",
+                "total_price": 50000,
+                "date": None,
+            }
+        )
+
+        result = parse_and_validate(
+            raw_output,
+            user_input="tadi belanja 50rb buat dagangan",
+            reference_date=date(2026, 10, 24),
+            transaction_type="expense",
+        )
+
+        self.assertIsNone(result["data"]["item_name"])
+        self.assertIsNone(result["data"]["quantity"])
+        self.assertIsNone(result["data"]["unit"])
+        self.assertEqual(result["data"]["total_price"], 50000)
+
     def test_item_size_is_not_invented_as_quantity_or_unit(self):
         product_size_output = json.dumps(
             {

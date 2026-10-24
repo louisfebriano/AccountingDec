@@ -42,7 +42,9 @@ Pelanggan bayar pesanan nasi kotak 300rb
 
 Arah transaksi ditentukan oleh aturan, bukan tebakan model. Kalimat yang
 ambigu, misalnya `transfer 500rb`, akan ditolak dengan pesan agar konteksnya
-diperjelas.
+diperjelas. Sebaliknya, kata arus kas yang diikuti nominal sudah cukup jelas:
+`masuk 300rb` dicatat sebagai pemasukan dan `keluar 25 ribu` sebagai
+pengeluaran.
 
 ## 3. Mencatat lewat suara
 

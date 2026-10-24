@@ -102,6 +102,50 @@ class TransactionTypeClassifierTests(unittest.TestCase):
             "unknown",
         )
 
+    def test_cash_in_and_cash_out_verbs_determine_direction(self):
+        # Pemilik usaha mencatat arus kasnya sendiri: "masuk" adalah pemasukan dan
+        # "keluar" adalah pengeluaran, termasuk saat nominal mengapit kata kerja.
+        income = (
+            "masuk 300rb dari pelanggan",
+            "dapet 150rb kemarin",
+            "terima 250rb dari Bu Ani",
+            "tadi ada yang order 2 gelas es teh",
+            "terima pesanan 10 kotak kue 250rb",
+            "orderan masuk 120rb",
+        )
+        for text in income:
+            with self.subTest(text=text):
+                self.assertEqual(classify_transaction_type(text), "income")
+
+        expense = (
+            "keluar 25 ribu tadi pagi",
+            "uang keluar 75rb buat bahan",
+            "bayar 75rb buat listrik",
+            "bayar wifi 300rb",
+            "bayar 200rb untuk gaji karyawan",
+            "bayar 50 ribu ke supplier",
+        )
+        for text in expense:
+            with self.subTest(text=text):
+                self.assertEqual(classify_transaction_type(text), "expense")
+
+    def test_quantity_is_not_mistaken_for_cash_flow(self):
+        # Kuantitas bukan nominal, jadi "masuk/keluar" tidak boleh aktif hanya
+        # karena ada angka seperti "10 karung".
+        self.assertEqual(classify_transaction_type("Stok masuk 10 karung"), "expense")
+        self.assertEqual(classify_transaction_type("Barang keluar gudang"), "unknown")
+
+    def test_owner_side_order_is_not_income(self):
+        # Pesanan oleh pemilik ke supplier bukan pemasukan; hanya pesanan yang
+        # datang ke usaha yang dihitung sebagai pemasukan.
+        self.assertEqual(classify_transaction_type("Saya order bahan 200rb"), "unknown")
+
+    def test_customer_payment_stays_income_despite_payment_word(self):
+        self.assertEqual(
+            classify_transaction_type("Pelanggan bayar pesanan 150rb"), "income"
+        )
+        self.assertEqual(classify_transaction_type("Pelanggan bayar 150rb"), "income")
+
 
 if __name__ == "__main__":
     unittest.main()

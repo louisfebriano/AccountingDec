@@ -37,7 +37,11 @@ _DATE_EXPRESSION_PATTERNS = (
 _NUMBER_PATTERN = re.compile(r"\d+(?:[.,]\d+)?")
 _GENERIC_ITEM_NAMES = {
     "barang",
+    "belanja",
+    "dagangan",
     "item",
+    "jualan",
+    "kebutuhan",
     "pembelian",
     "penjualan",
     "pesanan",

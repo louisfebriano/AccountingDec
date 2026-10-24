@@ -52,16 +52,62 @@ _STOCK_RESTOCK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Nominal rupiah untuk aturan arah transaksi. Kuantitas seperti "10 karung" atau
+# "2 dus" sengaja tidak dianggap nominal, sehingga tidak berubah menjadi uang
+# masuk/keluar hanya karena ada angka di dekat kata kerja.
+_NOMINAL_PATTERN = (
+    r"(?:rp\s*)?(?:"
+    r"\d{1,3}(?:\s\d{3})+"
+    r"|\d{4,}"
+    r"|\d+(?:[.,]\d+)?\s*(?:rb|ribu|rebu|k|jt|juta|ratus)"
+    r")\b"
+)
+
+# "masuk 300rb", "dapet 150rb", "terima 250rb" adalah uang masuk bagi pemilik
+# usaha. Pemilik usaha mencatat arus kasnya sendiri, jadi kata "masuk" sudah
+# cukup jelas sebagai pemasukan tanpa perlu frase "duit masuk".
+_INFLOW_VERB_PATTERN = re.compile(
+    rf"\b(?:masuk|dapet|dapat|nerima|menerima|terima)\s+{_NOMINAL_PATTERN}"
+)
+
+# Pesanan/pembeli yang datang adalah pemasukan. "saya order bahan" tidak ikut
+# tertangkap karena pola ini mensyaratkan tanda pesanan masuk.
+_ORDER_INCOME_PATTERN = re.compile(
+    r"\b(?:"
+    r"ada\s+(?:yang\s+)?(?:order|mesan|pesan)"
+    r"|(?:orderan|pesanan)\s+(?:masuk|datang)"
+    r"|(?:terima|menerima|dapat)\s+(?:pesanan|orderan)"
+    r")\b"
+)
+
 # Aturan konteks membedakan siapa yang membayar dan tujuan pembayarannya.
 INCOME_CONTEXT_PATTERNS = (
     re.compile(r"\b(?:pelanggan|pembeli)\s+(?:sudah\s+)?(?:bayar|membayar)\b"),
     re.compile(r"\bmenerima\s+pembayaran\s+dari\s+(?:pelanggan|pembeli)\b"),
+    _INFLOW_VERB_PATTERN,
+    _ORDER_INCOME_PATTERN,
 )
 
 _CUSTOMER_PURCHASE_PATTERN = re.compile(
     r"\b(?:pelanggan|pembeli)\s+(?:sudah\s+)?(?:beli|membeli)\b"
 )
 _PURCHASE_PATTERN = re.compile(r"\b(?:beli|membeli)\b")
+
+# "bayar 75rb buat listrik" / "bayar wifi 300rb": nominal dapat berada di antara
+# kata kerja dan tujuan pembayaran, jadi aturan "bayar <tujuan>" lama perlu
+# dilengkapi. Daftar tujuan sengaja terbatas pada biaya usaha agar pembayaran
+# pelanggan (mis. "Pelanggan bayar pesanan 150rb") tetap dibaca sebagai pemasukan.
+_PAYMENT_PURPOSE_PATTERN = re.compile(
+    r"\b(?:bayar|membayar|byr)\b.{0,60}?"
+    r"\b(?:listrik|air|wifi|internet|sewa|kontrakan|lapak|gaji|bahan|supplier|"
+    r"pemasok|tagihan|utang|hutang|cicilan|sampah|kebersihan|transport|bensin|"
+    r"parkir|pajak|iuran)\b"
+)
+
+# "keluar 25 ribu" adalah uang keluar pemilik usaha. Nominal wajib ada supaya
+# kata "keluar" pada konteks lain (mis. "barang keluar gudang") tidak otomatis
+# dianggap pengeluaran.
+_OUTFLOW_VERB_PATTERN = re.compile(rf"\bkeluar\s+{_NOMINAL_PATTERN}")
 
 EXPENSE_CONTEXT_PATTERNS = (
     re.compile(
@@ -70,6 +116,8 @@ EXPENSE_CONTEXT_PATTERNS = (
     ),
     re.compile(r"\b(?:bayar|membayar)\s+(?:ke\s+)?(?:supplier|pemasok)\b"),
     re.compile(r"\b(?:saya|aku|kami|kita)\s+(?:beli|membeli)\b"),
+    _PAYMENT_PURPOSE_PATTERN,
+    _OUTFLOW_VERB_PATTERN,
 )
 
 GENERAL_INCOME_PHRASES = (
