@@ -1,19 +1,20 @@
 export const THEME_KEY = "catatkas.theme.v1";
 
-export function resolveTheme(storedTheme, prefersDark = false) {
-  if (["light", "dark"].includes(storedTheme)) return storedTheme;
-  return prefersDark ? "dark" : "light";
+// Default selalu terang agar tampilan pertama konsisten di semua perangkat.
+// Pilihan pengguna yang sudah tersimpan tetap dihormati.
+export function resolveTheme(storedTheme) {
+  return storedTheme === "dark" ? "dark" : "light";
 }
 
 export function nextTheme(currentTheme) {
   return currentTheme === "dark" ? "light" : "dark";
 }
 
-export function loadTheme(storage = localStorage, mediaQuery = matchMedia("(prefers-color-scheme: dark)")) {
+export function loadTheme(storage = localStorage) {
   try {
-    return resolveTheme(storage.getItem(THEME_KEY), mediaQuery.matches);
+    return resolveTheme(storage.getItem(THEME_KEY));
   } catch {
-    return resolveTheme(null, mediaQuery.matches);
+    return "light";
   }
 }
 

@@ -6,9 +6,8 @@ import json
 import warnings
 from datetime import date
 from threading import Lock, RLock
-import torch
+
 from . import config
-from .model_utils import load_tokenizer, load_model_for_inference
 from .prompt_utils import build_inference_prompt
 from .postprocess import parse_and_validate
 from .price_utils import extract_price_from_text
@@ -92,6 +91,10 @@ def get_pipeline(adapter_path: str = None):
     if _model is None:
         with _pipeline_lock:
             if _model is None:
+                # Import berat (torch/transformers/peft) sengaja dilakukan di sini agar
+                # server tanpa GPU tetap bisa mengimpor src.api untuk mode proxy AI.
+                from .model_utils import load_model_for_inference, load_tokenizer
+
                 _tokenizer = load_tokenizer()
                 _model = load_model_for_inference(adapter_path)
     return _tokenizer, _model
@@ -122,6 +125,8 @@ def generate_with_adapter(
     stop_strings: list[str] | None = None,
 ) -> str:
     """Pilih adapter dan generate secara atomik agar request tidak tertukar."""
+    import torch
+
     with _generation_lock:
         tokenizer, model = get_pipeline(transaction_adapter_path)
         _ensure_adapter_loaded(model, adapter_name, adapter_path)
@@ -164,6 +169,8 @@ def generate_with_base_model(
     transaction_adapter_path: str | None = None,
 ) -> str:
     """Generate chat Llama dasar tanpa Soft Prompt pada model cache yang sama."""
+    import torch
+
     with _generation_lock:
         tokenizer, model = get_pipeline(transaction_adapter_path)
         disable_adapter = getattr(model, "disable_adapter", None)

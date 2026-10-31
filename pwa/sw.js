@@ -1,15 +1,15 @@
-const CACHE_NAME = "catatkas-shell-v27";
+const CACHE_NAME = "catatkas-shell-v29";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css?v=24",
-  "/app.js?v=26",
-  "/api.js?v=19",
+  "/app.js?v=28",
+  "/api.js?v=20",
   "/formatters.js?v=17",
   "/filters.js?v=17",
   "/categories.js?v=3",
   "/chart.js?v=19",
-  "/theme.js?v=16",
+  "/theme.js?v=17",
   "/storage.js?v=21",
   "/request-gate.js?v=16",
   "/recorder.js?v=16",

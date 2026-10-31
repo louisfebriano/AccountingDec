@@ -1,0 +1,61 @@
+# Blueprint Render untuk CatatKas (API + PWA, tanpa GPU).
+#
+# Layanan ini sengaja hanya memakai requirements-render.txt: torch, PaddleOCR, dan
+# faster-whisper berjalan di laptop dan diakses lewat AI_SERVICE_URL (Cloudflare
+# Tunnel). Jangan menambahkan requirements.txt di sini.
+#
+# Cara pakai: New > Blueprint > pilih repository ini > isi environment variable
+# bertanda sync:false saat Render meminta.
+
+services:
+  - type: web
+    name: catatkas
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install --upgrade pip && pip install -r requirements-render.txt
+    startCommand: >-
+      uvicorn src.api:app --host 0.0.0.0 --port $PORT
+      --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Cookie sesi hanya boleh dikirim lewat HTTPS di server publik.
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: "lax"
+      # Supavisor transaction mode + NullPool: aman untuk batas koneksi Supabase Free.
+      # Ganti ke "session" bila memakai direct connection (port 5432).
+      - key: DATABASE_POOL_MODE
+        value: "transaction"
+      # Model tidak pernah dimuat di server ini.
+      - key: MODEL_WARMUP_ON_STARTUP
+        value: "false"
+      - key: RECEIPT_LLM_ENABLED
+        value: "true"
+      - key: VOICE_LLM_NORMALIZATION_ENABLED
+        value: "true"
+      - key: AUDIT_LOG_ENABLED
+        value: "true"
+      - key: AI_CONNECT_TIMEOUT_SECONDS
+        value: "10"
+      - key: AI_REQUEST_TIMEOUT_SECONDS
+        value: "90"
+      # ---- Rahasia: diisi manual di dashboard Render ----
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # URL Cloudflare Tunnel ke layanan AI di laptop, misalnya
+      # https://ai.catatkas-contoh.com atau URL coba-coba *.trycloudflare.com
+      - key: AI_SERVICE_URL
+        sync: false
+      # Harus sama dengan AI_TRUST_INTERNAL_TOKEN di laptop.
+      - key: AI_INTERNAL_TOKEN
+        sync: false

@@ -127,6 +127,15 @@ export async function loginAccount(email, password, options = {}) {
   return readAuthResponse(response);
 }
 
+export async function autoLoginAccount(options = {}) {
+  const response = await plainFetch("/auth/auto-login", {
+    fetchImpl: options.fetchImpl,
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  return readAuthResponse(response);
+}
+
 export async function getCurrentUser(options = {}) {
   const response = await plainFetch("/auth/me", {
     fetchImpl: options.fetchImpl,

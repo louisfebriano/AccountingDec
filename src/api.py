@@ -2,6 +2,7 @@
 uvicorn src.api:app --reload --port 8000
 """
 
+import hmac
 import logging
 import re
 import tempfile
@@ -17,13 +18,15 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from starlette.background import BackgroundTask, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
-from . import config
+from . import ai_proxy, config
+from .ai_proxy import AIServiceTimeoutError, AIServiceUnavailableError
 from .audio_service import transcribe_audio
 from .audit_service import AuditSchemaError, get_audit_log_repository
 from .auth_service import (
@@ -61,6 +64,7 @@ from .transaction_repository import (
     get_transaction_repository,
 )
 from .transaction_schema import TransactionCreate, TransactionImport, TransactionUpdate
+from .voice_log import log_voice_event
 from .voice_normalization import correct_voice_transcript_with_llama
 
 # Pakai logger Uvicorn agar log INFO aplikasi tampil pada terminal API secara default.
@@ -223,6 +227,17 @@ def _clear_session_cookies(response: Response) -> None:
 
 async def require_authenticated_user(request: Request) -> AuthenticatedUser:
     """Validasi cookie access token dan pasang user_id untuk audit middleware."""
+    # Layanan AI di laptop menerima request dari server publik (Render) yang sudah
+    # memvalidasi session Supabase. Token ini hanya aktif bila diisi pada laptop.
+    internal_token = request.headers.get(ai_proxy.INTERNAL_TOKEN_HEADER)
+    expected_token = config.AI_TRUST_INTERNAL_TOKEN
+    if (
+        expected_token
+        and internal_token
+        and hmac.compare_digest(internal_token, expected_token)
+    ):
+        return AuthenticatedUser(id="ai-internal-service", email=None)
+
     access_token = request.cookies.get(config.AUTH_ACCESS_COOKIE_NAME)
     if not access_token:
         raise HTTPException(status_code=401, detail="Silakan login terlebih dahulu.")
@@ -355,6 +370,36 @@ def extract_transaction(user_input: str, adapter_path: str = None, reference_dat
         adapter_path=adapter_path,
         reference_date=reference_date,
     )
+
+
+async def _relay_ai_response(call) -> JSONResponse:
+    """Teruskan respons layanan AI lokal apa adanya agar kontrak PWA tidak berubah."""
+    try:
+        result = await call
+    except AIServiceTimeoutError:
+        logger.warning("Layanan AI lokal tidak merespons tepat waktu")
+        raise HTTPException(
+            status_code=504,
+            detail="Layanan AI di perangkat lokal tidak merespons tepat waktu. Coba lagi.",
+        ) from None
+    except AIServiceUnavailableError:
+        logger.warning("Layanan AI lokal tidak dapat dijangkau")
+        raise HTTPException(
+            status_code=503,
+            detail="Layanan AI di perangkat lokal sedang tidak aktif. Nyalakan lalu coba lagi.",
+        ) from None
+    if result.status_code in {401, 403}:
+        # 401 dari laptop berarti token internal tidak cocok, bukan session pengguna
+        # berakhir. Teruskan sebagai 503 agar PWA tidak mencoba refresh berulang.
+        logger.error(
+            "Layanan AI lokal menolak token internal (HTTP %s)",
+            result.status_code,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Layanan AI menolak permintaan server. Periksa konfigurasi token deployment.",
+        )
+    return JSONResponse(status_code=result.status_code, content=dict(result.payload))
 
 
 def _database_http_error(exc: Exception) -> HTTPException:
@@ -521,6 +566,18 @@ def warmup():
     get_pipeline()
 
 
+@app.on_event("startup")
+def warn_auto_login():
+    """Ingatkan operator bahwa akun demo dapat dipakai tanpa login."""
+    if not config.AUTO_LOGIN_ENABLED:
+        return
+    logger.warning(
+        "AUTO_LOGIN_ENABLED aktif: akun demo %s dapat dipakai tanpa login. "
+        "Matikan opsi ini pada deployment produksi.",
+        config.AUTO_LOGIN_EMAIL,
+    )
+
+
 @app.post("/auth/register", name="auth.register")
 async def register_user(
     credentials: AuthCredentials,
@@ -600,6 +657,51 @@ async def login_user(
     }
 
 
+@app.post("/auth/auto-login", name="auth.auto-login")
+async def auto_login_user(request: Request, response: Response):
+    """Login otomatis dengan akun demo bila diaktifkan pada konfigurasi server."""
+    if not config.AUTO_LOGIN_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="Login otomatis tidak diaktifkan pada server ini.",
+        )
+    email = config.AUTO_LOGIN_EMAIL
+    password = config.AUTO_LOGIN_PASSWORD
+    if not email or not password:
+        raise HTTPException(
+            status_code=503,
+            detail="Kredensial login otomatis belum lengkap.",
+        )
+    request.state.audit_metadata = {
+        "user_email": email,
+        "method": "auto_login",
+        "input": {"email": email},
+    }
+    try:
+        session = await login_supabase_user(email, password)
+    except (AuthConfigurationError, AuthServiceError) as exc:
+        raise _auth_http_error(exc) from None
+    user_payload = session.get("user") or {}
+    user_id = str(user_payload.get("id") or "").strip()
+    if (
+        not user_id
+        or not session.get("access_token")
+        or not session.get("refresh_token")
+    ):
+        raise HTTPException(status_code=503, detail="Session login otomatis tidak valid.")
+    request.state.audit_user_id = user_id
+    _set_session_cookies(response, session)
+    return {
+        "success": True,
+        "data": {
+            "user": {"id": user_id, "email": user_payload.get("email") or email},
+            "authenticated": True,
+            "auto_login": True,
+        },
+        "error": None,
+    }
+
+
 @app.post("/auth/refresh", name="auth.refresh")
 async def refresh_user_session(request: Request, response: Response):
     """Perbarui session tanpa mengekspos refresh token ke frontend."""
@@ -665,7 +767,7 @@ async def logout_user(request: Request, response: Response):
 
 
 @app.post("/extract", name="extract.text")
-def extract(
+async def extract(
     req: ExtractRequest,
     user: AuthenticatedUser = Depends(require_authenticated_user),
     request: Request = None,
@@ -675,8 +777,17 @@ def extract(
         method="text",
         input={"text": req.text, "reference_date": req.reference_date},
     )
+    if ai_proxy.ai_service_is_configured():
+        return await _relay_ai_response(
+            ai_proxy.extract_text(req.text, req.reference_date)
+        )
+
     reference_date = date.fromisoformat(req.reference_date) if req.reference_date else None
-    result = extract_transaction(req.text, reference_date=reference_date)
+    result = await run_in_threadpool(
+        extract_transaction,
+        req.text,
+        reference_date=reference_date,
+    )
 
     if result.get("out_of_context"):
         raise HTTPException(status_code=422, detail=result["error"])
@@ -704,16 +815,43 @@ async def extract_audio(
     audit_input["audio"]["format"] = suffix.removeprefix(".")
     temp_path: Optional[Path] = None
     request_id = uuid.uuid4().hex[:8]
+    # request_id yang sama dipakai pada console, logs/voice.log, dan audit_logs
+    # sehingga satu pemrosesan suara dapat ditelusuri dari berkas ke database.
+    _merge_audit_metadata(
+        request,
+        method="voice",
+        request_id=request_id,
+        input=audit_input,
+    )
 
     try:
         temp_path = await _save_upload_to_temp(file, suffix)
         audit_input["audio"]["size_bytes"] = temp_path.stat().st_size
+        log_voice_event(
+            request_id,
+            "received",
+            user_id=getattr(user, "id", None),
+            audio_format=suffix.removeprefix("."),
+            content_type=file.content_type,
+            size_bytes=audit_input["audio"]["size_bytes"],
+        )
+        if ai_proxy.ai_service_is_configured():
+            return await _relay_ai_response(
+                ai_proxy.extract_audio(
+                    temp_path.read_bytes(),
+                    f"audio{suffix}",
+                    file.content_type or "application/octet-stream",
+                    reference_date,
+                )
+            )
         transcript = await run_in_threadpool(transcribe_audio, temp_path)
         transcript = transcript.strip()
         audit_input["transcript"] = transcript
         _merge_audit_metadata(request, method="voice", input=audit_input)
         logger.info("[voice:%s] transcript=%r", request_id, transcript)
+        log_voice_event(request_id, "transcript", transcript=transcript)
         if not transcript:
+            log_voice_event(request_id, "empty_transcript")
             raise HTTPException(
                 status_code=422,
                 detail="Tidak ditemukan ucapan yang dapat dikenali pada audio",
@@ -728,11 +866,17 @@ async def extract_audio(
                     transcript,
                 )
                 normalization_method = "llama_3.2_base_and_rule_based"
-            except Exception:
+            except Exception as exc:
                 normalization_method = "rule_based_fallback"
                 logger.exception(
                     "[voice:%s] Koreksi typo Llama gagal; memakai fallback",
                     request_id,
+                )
+                log_voice_event(
+                    request_id,
+                    "normalization_fallback",
+                    error_type=type(exc).__name__,
+                    error=str(exc)[:500],
                 )
 
         normalized_text = normalize_voice_transaction_text(llama_corrected_text)
@@ -747,6 +891,13 @@ async def extract_audio(
             normalization_method,
         )
         logger.info("[voice:%s] normalized_text=%r", request_id, normalized_text)
+        log_voice_event(
+            request_id,
+            "normalized",
+            llama_corrected_text=llama_corrected_text,
+            normalized_text=normalized_text,
+            normalization_method=normalization_method,
+        )
         result = await run_in_threadpool(
             extract_transaction,
             normalized_text,
@@ -759,6 +910,14 @@ async def extract_audio(
             result.get("out_of_context", False),
             result.get("data"),
             result.get("error"),
+        )
+        log_voice_event(
+            request_id,
+            "extraction",
+            success=bool(result.get("success", False)),
+            out_of_context=bool(result.get("out_of_context", False)),
+            data=result.get("data"),
+            error=result.get("error"),
         )
 
         if result.get("out_of_context"):
@@ -773,10 +932,22 @@ async def extract_audio(
             "error": result.get("error"),
             "out_of_context": result.get("out_of_context", False),
         }
-    except HTTPException:
+    except HTTPException as exc:
+        log_voice_event(
+            request_id,
+            "rejected",
+            status_code=exc.status_code,
+            error=exc.detail,
+        )
         raise
-    except Exception:
+    except Exception as exc:
         logger.exception("Pemrosesan input audio gagal")
+        log_voice_event(
+            request_id,
+            "error",
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+        )
         raise HTTPException(
             status_code=500,
             detail="Audio gagal diproses. Silakan coba lagi.",
@@ -809,6 +980,15 @@ async def extract_receipt_endpoint(
     try:
         temp_path = await _save_receipt_upload(file, suffix)
         audit_input["image"]["size_bytes"] = temp_path.stat().st_size
+        if ai_proxy.ai_service_is_configured():
+            return await _relay_ai_response(
+                ai_proxy.extract_receipt(
+                    temp_path.read_bytes(),
+                    f"nota{suffix}",
+                    file.content_type or "application/octet-stream",
+                    reference_date,
+                )
+            )
         await run_in_threadpool(
             validate_receipt_image,
             temp_path,

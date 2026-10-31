@@ -104,6 +104,18 @@ uvicorn src.api:app --reload --port 8000
 Buka <http://localhost:8000/>. Daftar akun, login, lalu coba catat transaksi
 pertama.
 
+Ingin mencoba aplikasi tanpa mengisi form login? Aktifkan mode demo pada `.env`:
+
+```dotenv
+AUTO_LOGIN_ENABLED=true
+AUTO_LOGIN_EMAIL=testing@yopmail.com
+AUTO_LOGIN_PASSWORD=123123123
+```
+
+Selama opsi ini aktif, PWA otomatis masuk memakai akun tersebut. Kredensial
+hanya dibaca server dan tidak pernah dikirim ke browser, tetapi semua pengunjung
+berbagi satu akun. Matikan (`AUTO_LOGIN_ENABLED=false`) pada produksi.
+
 > Saat pertama kali dipakai, model Llama, Whisper, dan PaddleOCR akan diunduh.
 > Proses ini membutuhkan internet dan bisa memakan waktu beberapa menit.
 > Request pertama juga akan lebih lambat karena model harus dimuat ke memori.
@@ -138,8 +150,10 @@ bisa berbagi satu salinan base model.
 |---|---|
 | [Panduan penggunaan](docs/penggunaan.md) | Cara memakai teks, suara, Scan Nota, kategori, riwayat, dan PWA. |
 | [Instalasi dan konfigurasi](docs/instalasi.md) | Setup Supabase, daftar environment variable, akses dari HP, dan troubleshooting. |
+| [Deployment](docs/deployment.md) | Render Free + Cloudflare Tunnel, AI tetap di laptop, dan hosting PWA. |
 | [Pengembangan dan evaluasi](docs/pengembangan.md) | Arsitektur kode, dataset, training, evaluasi, dan pengujian. |
 | [API](docs/api.md) | Endpoint, contoh request/response, dan kode error. |
+| [Buku panduan](docs/guidebook/catatkas-guidebook.pdf) | Buku panduan A4 bergambar (19 halaman) untuk pengguna dan instalasi. |
 
 ## Struktur proyek
 
@@ -147,10 +161,12 @@ bisa berbagi satu salinan base model.
 src/       Backend FastAPI, pipeline AI, OCR, database, dan autentikasi
 pwa/       Frontend PWA tanpa framework atau proses build
 sql/       Schema awal dan migrasi Supabase
-docs/      Panduan penggunaan, instalasi, pengembangan, dan API
+docs/      Panduan penggunaan, instalasi, deployment, pengembangan, dan API
 tests/     Tes backend (unittest) dan frontend (node:test)
 data/      Dataset JSONL, anotasi, dan gambar nota
 adapters/  Hasil training Soft Prompt (tidak di-commit)
+functions/ Proksi API Cloudflare Pages (opsional, deployment)
+scripts/   Skrip bantu lokal, termasuk start_ai_service.ps1
 ```
 
 ## Batasan penting

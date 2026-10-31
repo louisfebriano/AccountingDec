@@ -1,5 +1,6 @@
 import {
   ApiError,
+  autoLoginAccount,
   clearTransactionsRemote,
   createTransactionRemote,
   deleteTransactionRemote,
@@ -14,7 +15,7 @@ import {
   refreshSession,
   registerAccount,
   updateTransactionRemote,
-} from "/api.js?v=19";
+} from "/api.js?v=20";
 import {
   aggregateTransactionsByPeriod,
   describeChartPoint,
@@ -55,7 +56,7 @@ import {
   setHistoryUser,
   updateTransaction,
 } from "/storage.js?v=21";
-import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=16";
+import { applyTheme, loadTheme, nextTheme, saveTheme } from "/theme.js?v=17";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -760,6 +761,24 @@ async function enterAuthenticatedApp(user) {
   updateConnection();
 }
 
+async function tryAutomaticLogin() {
+  let result;
+  try {
+    result = await autoLoginAccount();
+  } catch (error) {
+    // 403 berarti server tidak mengaktifkan mode demo; tampilkan form login biasa.
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+      return false;
+    }
+    showAuthentication();
+    setAuthStatus(error.message || "Login otomatis gagal.", "error");
+    return true;
+  }
+  await enterAuthenticatedApp(result.user);
+  setStatus("Mode demo: Anda masuk otomatis memakai akun uji.", "success");
+  return true;
+}
+
 async function initializeAuthentication() {
   document.body.dataset.authState = "loading";
   elements.authLoading.hidden = false;
@@ -775,8 +794,16 @@ async function initializeAuthentication() {
     }
     await enterAuthenticatedApp(session.user);
   } catch (error) {
+    const needsLogin = error instanceof ApiError && error.status === 401;
+    try {
+      if (needsLogin && (await tryAutomaticLogin())) return;
+    } catch (autoLoginError) {
+      showAuthentication();
+      setAuthStatus(autoLoginError.message || "Login otomatis gagal.", "error");
+      return;
+    }
     showAuthentication();
-    if (!(error instanceof ApiError && error.status === 401)) {
+    if (!needsLogin) {
       setAuthStatus(error.message || "Autentikasi belum dapat digunakan.", "error");
     }
   }

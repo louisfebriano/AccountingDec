@@ -39,6 +39,14 @@ _FRACTION_VALUES = {
 _VOICE_WORD_ALIASES = {
     "karong": "karung",
     "ristok": "restok",
+    # Whisper sering mendengar awal kata "restok" sebagai konsonan tambahan.
+    "kristok": "restok",
+    "kristock": "restok",
+    "krestok": "restok",
+    "keristok": "restok",
+    "ristock": "restok",
+    "restcok": "restok",
+    "res tok": "restok",
 }
 _VOICE_WORD_ALIAS_PATTERN = re.compile(
     rf"\b(?:{'|'.join(map(re.escape, _VOICE_WORD_ALIASES))})\b",

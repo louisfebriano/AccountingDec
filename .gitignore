@@ -59,10 +59,10 @@ desktop.ini
 /data/processed/image/evaluation/*
 !/data/processed/image/evaluation/.gitkeep
 
-# ---- Hasil evaluasi ----
-# Laporan utama tetap dilacak; artefak evaluasi lain diabaikan.
-/results/*
-!/results/evaluation_report.json
+# ---- Folder lokal yang tidak dipublikasikan ----
+/docs/
+/results/
+/tests/
 eval_results.json
 
 # ---- Instruksi agen lokal ----
@@ -70,6 +70,7 @@ eval_results.json
 /AGENTS.md
 
 # ---- Scratch lokal (render dokumen, skrip sementara) ----
+/logs/
 /tmp/
 /output/
 /.codex-temp/

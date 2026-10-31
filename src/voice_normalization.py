@@ -11,7 +11,8 @@ from . import config
 
 VOICE_NORMALIZATION_INSTRUCTION = (
     "Kamu adalah korektor transkripsi transaksi bahasa Indonesia. Perbaiki hanya "
-    "salah eja atau kata yang keliru didengar, misalnya 'karong' menjadi 'karung'. "
+    "salah eja atau kata yang keliru didengar, misalnya 'karong' menjadi 'karung' "
+    "atau 'kristok' menjadi 'restok'. "
     "Jangan mengubah angka, nominal, quantity, tanggal, nama barang, atau maksud "
     "transaksi. Pertahankan urutan kata sedekat mungkin. Jawab hanya dengan satu "
     "baris teks hasil koreksi tanpa penjelasan, label, tanda kutip, atau markdown."

@@ -72,6 +72,28 @@ AUDIT_LOG_ENABLED = os.getenv("AUDIT_LOG_ENABLED", "true").lower() in {
     "1", "true", "yes", "on"
 }
 
+# ---- Login otomatis mode demo ----
+# Bila aktif, PWA mencoba login otomatis memakai akun demo di bawah sehingga
+# pengunjung dapat mencoba aplikasi tanpa mengisi form login. Kredensial hanya
+# dibaca di server dan tidak pernah dikirim ke browser; semua pengunjung demo
+# berbagi satu akun. Jangan aktifkan pada deployment produksi.
+AUTO_LOGIN_ENABLED = os.getenv("AUTO_LOGIN_ENABLED", "false").lower() in {
+    "1", "true", "yes", "on"
+}
+AUTO_LOGIN_EMAIL = os.getenv("AUTO_LOGIN_EMAIL", "testing@yopmail.com").strip()
+AUTO_LOGIN_PASSWORD = os.getenv("AUTO_LOGIN_PASSWORD", "123123123")
+
+# ---- Log berkas input suara ----
+# Console uvicorn tetap menampilkan `[voice:<id>]`; berkas ini menyimpan satu
+# baris JSON per tahap (transkrip, normalisasi, hasil ekstraksi). Matikan bila
+# transkrip tidak boleh tersimpan di disk.
+VOICE_LOG_ENABLED = os.getenv("VOICE_LOG_ENABLED", "true").lower() in {
+    "1", "true", "yes", "on"
+}
+VOICE_LOG_PATH = os.getenv("VOICE_LOG_PATH", "logs/voice.log").strip()
+VOICE_LOG_MAX_BYTES = int(os.getenv("VOICE_LOG_MAX_BYTES", "5242880"))
+VOICE_LOG_BACKUP_COUNT = int(os.getenv("VOICE_LOG_BACKUP_COUNT", "3"))
+
 # ---- Soft Prompt Tuning (PEFT) ----
 NUM_VIRTUAL_TOKENS = 20
 PROMPT_TUNING_INIT_TEXT = (
@@ -109,6 +131,19 @@ MAX_NEW_TOKENS = 256
 MODEL_WARMUP_ON_STARTUP = os.getenv("MODEL_WARMUP_ON_STARTUP", "false").lower() in {
     "1", "true", "yes", "on"
 }
+
+# ---- Mode deployment: AI di laptop ----
+# AI_SERVICE_URL diisi pada server publik (Render) agar endpoint /extract diteruskan
+# ke layanan AI lokal melalui Cloudflare Tunnel. Kosongkan untuk menjalankan pipeline
+# AI langsung di proses ini (mode lokal seperti sebelumnya).
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "").strip().rstrip("/")
+# Token yang dikirim server publik ke layanan AI lokal.
+AI_INTERNAL_TOKEN = os.getenv("AI_INTERNAL_TOKEN", "").strip()
+# Token yang dipercaya oleh layanan AI lokal. Jangan diisi pada server publik.
+AI_TRUST_INTERNAL_TOKEN = os.getenv("AI_TRUST_INTERNAL_TOKEN", "").strip()
+# Batas waktu menunggu layanan AI lokal (detik). OCR + Llama bisa puluhan detik.
+AI_CONNECT_TIMEOUT_SECONDS = float(os.getenv("AI_CONNECT_TIMEOUT_SECONDS", "10"))
+AI_REQUEST_TIMEOUT_SECONDS = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "90"))
 
 # ---- Speech-to-text (faster-whisper) ----
 # Whisper sengaja berjalan di CPU secara default agar tidak berebut VRAM dengan Llama.
