@@ -369,99 +369,111 @@ def _null_unmentioned_optional_fields(result_data: dict, user_input: str) -> Non
         result_data["unit"] = canonical_unit
 
 
+def _first_json_object(raw_output: str) -> tuple[Optional[dict], Optional[str]]:
+    """Ambil HANYA objek JSON pertama yang valid dari output model.
+
+    Model kadang tetap menulis contoh few-shot lain setelah JSON utama selesai.
+    Semua teks setelah objek pertama sengaja diabaikan.
+    """
+    start = raw_output.find("{")
+    if start == -1:
+        return None, "Tidak ditemukan JSON pada output"
+    try:
+        parsed, _end_index = json.JSONDecoder().raw_decode(raw_output, start)
+    except json.JSONDecodeError as exc:
+        return None, f"JSON tidak valid: {exc}"
+    if not isinstance(parsed, dict):
+        return None, "JSON yang dihasilkan bukan objek"
+    return parsed, None
+
+
+def _apply_date_rule(user_input: Optional[str], reference_date: date) -> str:
+    """Tentukan tanggal transaksi dari kalimat atau dari ``reference_date``.
+
+    Tanggal keluaran model tidak dipercaya karena model dapat mengarang tanggal
+    ISO yang valid tetapi tidak pernah disebut pengguna.
+    """
+    resolved = resolve_date(user_input, reference_date) if user_input else None
+    return resolved or reference_date.isoformat()
+
+
+def _apply_price_rule(result_data: dict, user_input: str) -> None:
+    """Ambil nominal hanya dari pola harga yang benar-benar ada di kalimat.
+
+    Konversi "180rb" menjadi 180000 adalah aturan matematis pasti, jadi lebih
+    aman dihitung dengan regex daripada ditebak model. Bila kalimat tidak
+    menyebut nominal, nilainya ``None`` dan pengguna mengisinya di dialog
+    konfirmasi.
+    """
+    result_data["total_price"] = extract_price_from_text(user_input)
+
+
+def _apply_tracked_quantity_rules(
+    result_data: dict,
+    user_input: str,
+    transaction_type: TransactionType,
+) -> None:
+    """Lengkapi quantity/unit untuk pola yang jelas tertulis di kalimat.
+
+    Dua pola yang ditangani:
+    1. Jumlah dan satuan eksplisit, termasuk bentuk rapat ("500gram"), singkatan
+       ("3tbg"), pecahan ("setengah kg"), dan kemasan bertingkat ("2 dus isi 24 botol").
+    2. Penjualan yang menyebut jumlah barang secara jelas, misalnya "3 bakmi laku".
+    """
+    quantity_unit = _extract_clear_quantity_unit(user_input, result_data.get("item_name"))
+    if quantity_unit is not None:
+        result_data.update(quantity_unit)
+
+    if transaction_type == "income":
+        sale_details = _extract_clear_sale_details(user_input)
+        if sale_details is not None:
+            result_data.update(sale_details)
+
+
 def parse_and_validate(
     raw_output: str,
     user_input: Optional[str] = None,
     reference_date: Optional[date] = None,
     transaction_type: TransactionType = "unknown",
 ) -> dict:
+    """Ubah output mentah model menjadi satu transaksi terstruktur.
+
+    Urutan kerjanya:
+
+    1. Ambil objek JSON pertama dari output model.
+    2. Paksa ``transaction_type`` memakai hasil aturan ``transaction_type.py``,
+       bukan tebakan model.
+    3. Tentukan ``date`` dari kalimat atau ``reference_date``.
+    4. Tentukan ``total_price`` dari pola harga di kalimat.
+    5. Kosongkan item/quantity/unit yang tidak dapat dilacak ke kalimat
+       (mencegah data karangan), lalu lengkapi dengan pola yang jelas.
+
+    Return ``{"success": bool, "data": dict | None, "error": str | None}``.
     """
-    Parse raw output model jadi dict terstruktur + validasi.
-    Ambil HANYA objek JSON pertama yang valid (abaikan teks/JSON tambahan setelahnya,
-    karena model kadang lanjut generate pola few-shot lain).
+    raw_dict, parse_error = _first_json_object(raw_output)
+    if parse_error is not None:
+        return {"success": False, "data": None, "error": parse_error}
 
-    Aturan pengisian field "date":
-    1. Tanggal eksplisit atau relatif diselesaikan secara rule-based dari kalimat.
-    2. Kalau kalimat tidak menyebut tanggal, gunakan reference_date (hari ini kalau
-       tidak dikirim eksplisit). Tanggal keluaran model tidak dipercaya agar tanggal
-       halusinasi tidak tersimpan.
-
-    Aturan pengisian field "total_price":
-    1. Kalau user_input mengandung pola harga eksplisit (akhiran rb/ribu/rebu/k/ratus/
-       juta/jt, pemisah ribuan bertitik seperti "180.000", atau angka polos 4+ digit),
-       nilai rule-based itulah yang dipakai (override hasil model). Ini karena konversi
-       satuan harga adalah aturan matematis pasti, bukan sesuatu yang perlu "ditebak"
-       model -- lebih reliable diambil lewat rule daripada bergantung ke soft prompt
-       yang kapasitasnya terbatas untuk generalisasi ke variasi kalimat baru.
-    2. Kalau tidak ada harga yang dapat dilacak ke kalimat pengguna, total_price diisi
-       null. Nilai harga tebakan model TIDAK dipercaya, karena model dapat mengarang
-       nominal yang tidak disebut pengguna (mis. "beli terigu 5kg" menjadi 15000).
-       Nominal yang kosong dilengkapi pengguna pada popup konfirmasi sebelum transaksi
-       disimpan ke database.
-
-    Return dict {"success": bool, "data": ..., "error": ...}
-    """
-    start = raw_output.find("{")
-    if start == -1:
-        return {"success": False, "data": None, "error": "Tidak ditemukan JSON pada output"}
-
-    decoder = json.JSONDecoder()
-    try:
-        raw_dict, _end_index = decoder.raw_decode(raw_output, start)
-    except json.JSONDecodeError as e:
-        return {"success": False, "data": None, "error": f"JSON tidak valid: {e}"}
-
-    # Nilai rule-based selalu diprioritaskan. Keluaran model lama boleh tidak memiliki
-    # field ini, sedangkan keluaran model yang kebetulan memilikinya tetap ditimpa agar
-    # klasifikasi konsisten dan tidak bergantung pada soft prompt.
+    # Nilai rule-based selalu diprioritaskan agar klasifikasi konsisten dan tidak
+    # bergantung pada output soft prompt.
     raw_dict["transaction_type"] = transaction_type
 
     try:
         validated = TransaksiSchema(**raw_dict)
-    except ValidationError as e:
-        return {"success": False, "data": None, "error": f"Validasi gagal: {e}"}
+    except ValidationError as exc:
+        return {"success": False, "data": None, "error": f"Validasi gagal: {exc}"}
 
     result_data = validated.model_dump()
     reference_date = reference_date or date.today()
+    result_data["date"] = _apply_date_rule(user_input, reference_date)
 
-    # ---- Resolve date ----
-    # Tanggal selalu berasal dari teks atau reference_date. Jangan percaya tanggal model
-    # karena model dapat menghasilkan tanggal ISO yang valid tetapi tidak disebut pengguna.
-    resolved = resolve_date(user_input, reference_date) if user_input else None
-    result_data["date"] = resolved or reference_date.isoformat()
-
-    # ---- Override total_price kalau pola harga eksplisit ketemu di kalimat asli ----
-    # Harga yang tidak dapat dilacak ke kalimat pengguna dianggap TIDAK disebutkan:
-    # nilai tebakan model (mis. total_price 15000 untuk "beli terigu 5kg") tidak
-    # dipercaya agar nominal rekaan tidak otomatis tercatat. Popup konfirmasi di
-    # frontend menampilkan nominal kosong dan meminta pengguna mengisinya
-    # sebelum transaksi dikirim ke Supabase.
     if user_input:
-        result_data["total_price"] = extract_price_from_text(user_input)
+        _apply_price_rule(result_data, user_input)
 
-    # Jangan mempercayai detail opsional yang hanya muncul dari keluaran model.
-    # Ketiganya harus dapat dilacak kembali ke kalimat pengguna agar halusinasi
-    # seperti quantity=1 atau unit="pcs" tidak menjadi transaksi tersimpan. Tanpa
-    # user_input, tidak ada sumber yang dapat dipakai untuk membuktikan nilainya.
+    # Tanpa user_input tidak ada sumber yang dapat dipakai untuk membuktikan
+    # nilai item/quantity/unit, jadi ketiganya dikosongkan.
     _null_unmentioned_optional_fields(result_data, user_input or "")
-
-    # Quantity dan unit yang eksplisit lebih dapat diandalkan daripada tebakan model.
-    # Aturan ini juga menangani angka rapat (500gram), singkatan (3tbg), pecahan
-    # sederhana, dan kemasan bertingkat tanpa mengambil angka harga sebagai quantity.
     if user_input:
-        quantity_unit = _extract_clear_quantity_unit(
-            user_input,
-            result_data.get("item_name"),
-        )
-        if quantity_unit is not None:
-            result_data.update(quantity_unit)
-
-    # Pola seperti "3 bakmi laku" sering kurang stabil di model karena quantity berada
-    # sebelum nama barang. Untuk pola yang benar-benar jelas, hasil teks diprioritaskan
-    # dan unit tetap null apabila memang tidak disebutkan pengguna.
-    if user_input and transaction_type == "income":
-        sale_details = _extract_clear_sale_details(user_input)
-        if sale_details is not None:
-            result_data.update(sale_details)
+        _apply_tracked_quantity_rules(result_data, user_input, transaction_type)
 
     return {"success": True, "data": result_data, "error": None}

@@ -140,9 +140,43 @@ kembali isi `.env` dan koneksi Supabase.
 | `python -m src.train` | Melatih ulang Soft Prompt transaksi. |
 | `python -m src.train_receipt --smoke-test` | Uji satu langkah training nota tanpa menyimpan adapter. |
 | `python -m src.train_receipt` | Melatih Soft Prompt nota. |
+| `python -m src.prepare_cord_dataset` | Persiapan dataset CORD dari Hugging Face → JSONL nota untuk training/validasi. |
+| `python -m src.evaluate_receipt --fields six` | Evaluasi nota hanya pada enam field transaksi, tanpa WER/CER. |
 
 Hentikan server sebelum training jika GPU hanya 6 GB. Training dan server tidak
 bisa berbagi satu salinan base model.
+
+### Dataset CORD untuk fitur foto nota
+
+Selain dataset sintetis lokal, fitur foto nota dapat dilatih dan divalidasi dengan
+dataset [CORD v2](https://huggingface.co/datasets/naver-clova-ix/cord-v2) dari
+Hugging Face:
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("naver-clova-ix/cord-v2")
+```
+
+Persiapan data memerlukan PaddleOCR karena CORD membawa gambar nota dan ground
+truth, sedangkan CatatKas memakai teks OCR sebagai input training:
+
+```powershell
+python -m src.prepare_cord_dataset --reference-date 2026-08-26
+```
+
+Hasil JSONL (train/validation/eval) dapat dipakai ulang untuk training:
+
+```dotenv
+RECEIPT_TRAIN_DATA_PATH=data/processed/cord-train.jsonl
+RECEIPT_VALIDATION_DATA_PATH=data/processed/cord-validation.jsonl
+RECEIPT_EVAL_DATA_PATH=data/processed/cord-eval.jsonl
+```
+
+Validasi fitur foto nota hanya memakai enam field transaksi
+(`item_name`, `quantity`, `unit`, `total_price`, `date`, `transaction_type`) dengan
+total dihitung dari harga barang per item; tidak perlu WER/CER dan field pajak,
+diskon, atau biaya layanan tidak divalidasi.
 
 ## Dokumentasi
 
@@ -152,8 +186,10 @@ bisa berbagi satu salinan base model.
 | [Instalasi dan konfigurasi](docs/instalasi.md) | Setup Supabase, daftar environment variable, akses dari HP, dan troubleshooting. |
 | [Deployment](docs/deployment.md) | Render Free + Cloudflare Tunnel, AI tetap di laptop, dan hosting PWA. |
 | [Pengembangan dan evaluasi](docs/pengembangan.md) | Arsitektur kode, dataset, training, evaluasi, dan pengujian. |
+| [Dokumentasi developer](docs/dev/README.md) | Penjelasan kode per fitur (teks, suara, foto nota) dari input sampai tersimpan, plus kamus kode dan rencana belajar. |
 | [API](docs/api.md) | Endpoint, contoh request/response, dan kode error. |
 | [Buku panduan](docs/guidebook/catatkas-guidebook.pdf) | Buku panduan A4 bergambar (19 halaman) untuk pengguna dan instalasi. |
+| [Buku panduan developer](docs/dev/catatkas-dev-guidebook.pdf) | Buku panduan A4 cetak (24 halaman) untuk membaca isi kode CatatKas sendiri: fitur teks, suara, foto nota, data, model, dan praktik debugging. |
 
 ## Struktur proyek
 
@@ -161,7 +197,7 @@ bisa berbagi satu salinan base model.
 src/       Backend FastAPI, pipeline AI, OCR, database, dan autentikasi
 pwa/       Frontend PWA tanpa framework atau proses build
 sql/       Schema awal dan migrasi Supabase
-docs/      Panduan penggunaan, instalasi, deployment, pengembangan, dan API
+docs/      Panduan penggunaan, instalasi, deployment, pengembangan, API, dan docs/dev/ untuk pembaca kode
 tests/     Tes backend (unittest) dan frontend (node:test)
 data/      Dataset JSONL, anotasi, dan gambar nota
 adapters/  Hasil training Soft Prompt (tidak di-commit)

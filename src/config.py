@@ -231,6 +231,21 @@ RECEIPT_REAL_EVAL_DATA_PATH = os.getenv(
     "RECEIPT_REAL_EVAL_DATA_PATH",
     "data/processed/receipt-real-eval.jsonl",
 )
+# ---- Dataset CORD dari Hugging Face ----
+# Dataset CORD (naver-clova-ix/cord-v2) dipersiapan menjadi JSONL CatatKas via
+# OCR lokal, lalu dipakai untuk training dan validasi fitur foto nota.
+RECEIPT_CORD_TRAIN_DATA_PATH = os.getenv(
+    "RECEIPT_CORD_TRAIN_DATA_PATH",
+    "data/processed/cord-train.jsonl",
+)
+RECEIPT_CORD_VALIDATION_DATA_PATH = os.getenv(
+    "RECEIPT_CORD_VALIDATION_DATA_PATH",
+    "data/processed/cord-validation.jsonl",
+)
+RECEIPT_CORD_EVAL_DATA_PATH = os.getenv(
+    "RECEIPT_CORD_EVAL_DATA_PATH",
+    "data/processed/cord-eval.jsonl",
+)
 RECEIPT_SOFT_PROMPT_CONTRACT_VERSION = int(
     os.getenv("RECEIPT_SOFT_PROMPT_CONTRACT_VERSION", "1")
 )

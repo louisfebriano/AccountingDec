@@ -1,3 +1,19 @@
+/**
+ * app.js adalah pusat state dan seluruh interaksi UI CatatKas.
+ *
+ * Isi berkas ini, dari atas ke bawah:
+ * 1. Import modul kecil (api, storage, chart, filters, formatters, kategori).
+ * 2. `elements`  : daftar elemen HTML yang dipakai berulang.
+ * 3. Pemilih kategori dan dialog konfirmasi transaksi.
+ * 4. Autentikasi (login, register, auto-login, logout).
+ * 5. Render riwayat, ringkasan, grafik, dan filter.
+ * 6. Alur tiga fitur input: teks, suara, dan foto nota.
+ * 7. Form manual, detail, edit, hapus, dan inisialisasi aplikasi.
+ *
+ * Alur singkat: input pengguna -> panggil API -> dialog konfirmasi editable ->
+ * simpan ke Supabase -> render ulang riwayat.
+ */
+
 import {
   ApiError,
   autoLoginAccount,
@@ -273,7 +289,10 @@ let confirmSaving = false;
 // diteruskan sudah terseleksi ke dialog konfirmasi, dan ikut disimpan.
 let manualCategorySelected = null;
 
-function buildCategoryPicker() {
+// Ketiga pemilih kategori (popup Scan Nota, dialog konfirmasi, dan form manual)
+// memakai bentuk chip yang sama. Dua helper di bawah membangun dan menandai chip
+// agar tidak ada tiga salinan kode yang harus diubah bersamaan.
+function appendCategoryChips(container, onSelect) {
   const chips = CATEGORY_PRESETS.map((preset) => {
     const chip = document.createElement("button");
     chip.type = "button";
@@ -281,18 +300,26 @@ function buildCategoryPicker() {
     chip.dataset.category = preset;
     chip.textContent = categoryPresentation(preset);
     chip.setAttribute("aria-pressed", "false");
-    chip.addEventListener("click", () => selectCategoryChip(preset));
+    chip.addEventListener("click", () => onSelect(preset));
     return chip;
   });
-  elements.categoryPickGrid.append(...chips);
+  container.append(...chips);
 }
 
-function syncCategoryPickerSelection() {
-  elements.categoryPickGrid.querySelectorAll(".category-chip").forEach((chip) => {
-    const active = chip.dataset.category === selectedCategory;
+function syncCategoryChips(container, selected) {
+  container.querySelectorAll(".category-chip").forEach((chip) => {
+    const active = chip.dataset.category === selected;
     chip.classList.toggle("is-selected", active);
     chip.setAttribute("aria-pressed", String(active));
   });
+}
+
+function buildCategoryPicker() {
+  appendCategoryChips(elements.categoryPickGrid, selectCategoryChip);
+}
+
+function syncCategoryPickerSelection() {
+  syncCategoryChips(elements.categoryPickGrid, selectedCategory);
 }
 
 function selectCategoryChip(preset) {
@@ -366,25 +393,11 @@ elements.categoryPickDialog.addEventListener("cancel", (event) => {
 });
 
 function buildConfirmCategoryPicker() {
-  const chips = CATEGORY_PRESETS.map((preset) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "category-chip";
-    chip.dataset.category = preset;
-    chip.textContent = categoryPresentation(preset);
-    chip.setAttribute("aria-pressed", "false");
-    chip.addEventListener("click", () => selectConfirmCategoryChip(preset));
-    return chip;
-  });
-  elements.confirmCategoryGrid.append(...chips);
+  appendCategoryChips(elements.confirmCategoryGrid, selectConfirmCategoryChip);
 }
 
 function syncConfirmCategoryPickerSelection() {
-  elements.confirmCategoryGrid.querySelectorAll(".category-chip").forEach((chip) => {
-    const active = chip.dataset.category === confirmCategorySelected;
-    chip.classList.toggle("is-selected", active);
-    chip.setAttribute("aria-pressed", String(active));
-  });
+  syncCategoryChips(elements.confirmCategoryGrid, confirmCategorySelected);
 }
 
 function selectConfirmCategoryChip(preset) {
@@ -395,25 +408,11 @@ function selectConfirmCategoryChip(preset) {
 }
 
 function buildManualCategoryPicker() {
-  const chips = CATEGORY_PRESETS.map((preset) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "category-chip";
-    chip.dataset.category = preset;
-    chip.textContent = categoryPresentation(preset);
-    chip.setAttribute("aria-pressed", "false");
-    chip.addEventListener("click", () => selectManualCategoryChip(preset));
-    return chip;
-  });
-  elements.manualCategoryGrid.append(...chips);
+  appendCategoryChips(elements.manualCategoryGrid, selectManualCategoryChip);
 }
 
 function syncManualCategoryPickerSelection() {
-  elements.manualCategoryGrid.querySelectorAll(".category-chip").forEach((chip) => {
-    const active = chip.dataset.category === manualCategorySelected;
-    chip.classList.toggle("is-selected", active);
-    chip.setAttribute("aria-pressed", String(active));
-  });
+  syncCategoryChips(elements.manualCategoryGrid, manualCategorySelected);
 }
 
 function selectManualCategoryChip(preset) {

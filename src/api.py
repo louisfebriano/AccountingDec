@@ -1,5 +1,15 @@
-"""
-uvicorn src.api:app --reload --port 8000
+"""Seluruh endpoint HTTP CatatKas beserta penyajian PWA.
+
+Cara membaca berkas ini:
+1. ``require_authenticated_user``  -> menentukan siapa pengguna request ini.
+2. ``audit_backend_request``       -> mencatat setiap request fitur ke audit_logs.
+3. ``/extract``, ``/extract/audio``, ``/extract/receipt``
+   -> tiga pipeline ekstraksi (teks, suara, foto nota).
+4. ``/transactions*``              -> CRUD ke Supabase lewat transaction_repository.
+
+Menjalankan server::
+
+    uvicorn src.api:app --reload --port 8000
 """
 
 import hmac
@@ -320,10 +330,13 @@ async def audit_backend_request(request: Request, call_next):
 
 def _receipt_response_data(
     semantic_data: dict,
-    rule_result: dict,
     validation: dict,
 ) -> dict:
-    """Bangun hasil nota minimum untuk diedit pengguna sebelum disimpan."""
+    """Bangun hasil nota minimum yang diedit pengguna sebelum disimpan.
+
+    Satu nota selalu menjadi satu transaksi ``expense``. Rincian barang masuk ke
+    ``receipt.items``, bukan transaksi terpisah.
+    """
     receipt = {
         "merchant_name": semantic_data.get("merchant_name"),
         "total": semantic_data.get("total"),
@@ -602,8 +615,7 @@ async def register_user(
     user_id = str(user_payload.get("id") or "").strip() or None
     if not user_id:
         raise HTTPException(status_code=503, detail="Respons registrasi tidak valid.")
-    if user_id:
-        request.state.audit_user_id = user_id
+    request.state.audit_user_id = user_id
     authenticated = bool(session.get("access_token") and session.get("refresh_token"))
     if authenticated:
         _set_session_cookies(response, session)
@@ -722,9 +734,8 @@ async def refresh_user_session(request: Request, response: Response):
     ):
         _clear_session_cookies(response)
         raise HTTPException(status_code=503, detail="Session login tidak valid.")
-    if user_id:
-        request.state.audit_user_id = user_id
-        request.state.audit_metadata = {"user_email": user_payload.get("email")}
+    request.state.audit_user_id = user_id
+    request.state.audit_metadata = {"user_email": user_payload.get("email")}
     _set_session_cookies(response, session)
     return {
         "success": True,
@@ -795,6 +806,49 @@ async def extract(
     return result
 
 
+def _normalize_voice_input(transcript: str, request_id: str) -> tuple[str, str, str]:
+    """Ubah transkrip mentah menjadi kalimat yang siap diekstrak.
+
+    Dua tahap: koreksi typo dengan Llama base (boleh dimatikan lewat konfigurasi),
+    lalu normalisasi bilangan lisan ("seratus dua puluh ribu" menjadi "120000").
+
+    Return ``(teks_hasil_koreksi, teks_normal, nama_metode)``.
+    """
+    corrected = transcript
+    method = "rule_based"
+    if config.VOICE_LLM_NORMALIZATION_ENABLED:
+        try:
+            corrected = correct_voice_transcript_with_llama(transcript)
+            method = "llama_3.2_base_and_rule_based"
+        except Exception as exc:
+            # Koreksi Llama bersifat opsional: transkrip asli tetap dipakai.
+            method = "rule_based_fallback"
+            logger.exception(
+                "[voice:%s] Koreksi typo Llama gagal; memakai fallback",
+                request_id,
+            )
+            log_voice_event(
+                request_id,
+                "normalization_fallback",
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+            )
+    return corrected, normalize_voice_transaction_text(corrected), method
+
+
+def _voice_response(result: dict, transcript: str, normalized_text: str) -> dict:
+    """Bentuk respons suara yang dipakai PWA (transkrip + enam field)."""
+    return {
+        "success": result.get("success", False),
+        "source": "voice",
+        "transcript": transcript,
+        "normalized_text": normalized_text,
+        "data": result.get("data"),
+        "error": result.get("error"),
+        "out_of_context": result.get("out_of_context", False),
+    }
+
+
 @app.post("/extract/audio", name="extract.audio")
 async def extract_audio(
     file: UploadFile = File(...),
@@ -857,47 +911,32 @@ async def extract_audio(
                 detail="Tidak ditemukan ucapan yang dapat dikenali pada audio",
             )
 
-        llama_corrected_text = transcript
-        normalization_method = "rule_based"
-        if config.VOICE_LLM_NORMALIZATION_ENABLED:
-            try:
-                llama_corrected_text = await run_in_threadpool(
-                    correct_voice_transcript_with_llama,
-                    transcript,
-                )
-                normalization_method = "llama_3.2_base_and_rule_based"
-            except Exception as exc:
-                normalization_method = "rule_based_fallback"
-                logger.exception(
-                    "[voice:%s] Koreksi typo Llama gagal; memakai fallback",
-                    request_id,
-                )
-                log_voice_event(
-                    request_id,
-                    "normalization_fallback",
-                    error_type=type(exc).__name__,
-                    error=str(exc)[:500],
-                )
-
-        normalized_text = normalize_voice_transaction_text(llama_corrected_text)
-        audit_input["llama_corrected_text"] = llama_corrected_text
+        # Tahap 1: rapikan kalimat (koreksi typo + bilangan lisan).
+        corrected_text, normalized_text, normalization_method = await run_in_threadpool(
+            _normalize_voice_input,
+            transcript,
+            request_id,
+        )
+        audit_input["llama_corrected_text"] = corrected_text
         audit_input["normalized_text"] = normalized_text
         audit_input["normalization_method"] = normalization_method
         _merge_audit_metadata(request, method="voice", input=audit_input)
         logger.info(
             "[voice:%s] llama_corrected_text=%r method=%s",
             request_id,
-            llama_corrected_text,
+            corrected_text,
             normalization_method,
         )
         logger.info("[voice:%s] normalized_text=%r", request_id, normalized_text)
         log_voice_event(
             request_id,
             "normalized",
-            llama_corrected_text=llama_corrected_text,
+            llama_corrected_text=corrected_text,
             normalized_text=normalized_text,
             normalization_method=normalization_method,
         )
+
+        # Tahap 2: kalimat hasil normalisasi masuk ke pipeline teks yang sama.
         result = await run_in_threadpool(
             extract_transaction,
             normalized_text,
@@ -923,15 +962,7 @@ async def extract_audio(
         if result.get("out_of_context"):
             raise HTTPException(status_code=422, detail=result["error"])
 
-        return {
-            "success": result.get("success", False),
-            "source": "voice",
-            "transcript": transcript,
-            "normalized_text": normalized_text,
-            "data": result.get("data"),
-            "error": result.get("error"),
-            "out_of_context": result.get("out_of_context", False),
-        }
+        return _voice_response(result, transcript, normalized_text)
     except HTTPException as exc:
         log_voice_event(
             request_id,
@@ -955,6 +986,145 @@ async def extract_audio(
     finally:
         if temp_path is not None:
             _delete_temp_file(temp_path)
+
+
+def _audit_receipt_ocr(
+    request: Request | None,
+    audit_input: dict,
+    parsed: dict,
+) -> tuple[str, str]:
+    """Simpan teks OCR (dibatasi panjangnya) pada audit.
+
+    Return ``(teks_untuk_model, teks_penuh_ocr)``. Model boleh menerima versi
+    ringkas agar tidak melebihi batas token, sedangkan teks penuh tetap
+    dikembalikan ke PWA untuk ditampilkan apa adanya.
+    """
+    full_ocr_text = str(parsed.get("ocr_text") or "")
+    compact_ocr_text = str(parsed.get("ocr_model_text") or full_ocr_text)
+    model_ocr_text = (
+        compact_ocr_text
+        if config.RECEIPT_OCR_COMPACT_FOR_MODEL
+        else full_ocr_text
+    )
+    parsed["ocr_model_text"] = model_ocr_text
+    ocr_text, ocr_text_truncated = _limited_audit_text(full_ocr_text)
+    audit_model_text, audit_model_text_truncated = _limited_audit_text(model_ocr_text)
+    audit_input.update(
+        ocr_text=ocr_text,
+        ocr_text_truncated=ocr_text_truncated,
+        ocr_model_text=audit_model_text,
+        ocr_model_text_truncated=audit_model_text_truncated,
+        ocr_compacted=model_ocr_text != full_ocr_text,
+    )
+    _merge_audit_metadata(request, method="receipt", input=audit_input)
+    return model_ocr_text, full_ocr_text
+
+
+def _log_receipt_diagnostics(
+    parsed: dict,
+    model_ocr_text: str,
+    full_ocr_text: str,
+    request_id: str,
+) -> None:
+    """Catat ringkasan OCR dan parser ke console agar mudah ditelusuri."""
+    rule_receipt = parsed["receipt"]
+    ocr_diagnostics = parsed.get("ocr_diagnostics") or {}
+    logger.info(
+        "[receipt:%s] ocr_passes=%s selected_pass=%s scores=%s",
+        request_id,
+        ocr_diagnostics.get("passes"),
+        ocr_diagnostics.get("selected_pass"),
+        ocr_diagnostics.get("scores"),
+    )
+    logger.info(
+        "[receipt:%s] rule_parser has_merchant=%s items=%d has_total=%s has_date=%s",
+        request_id,
+        rule_receipt.get("merchant_name") is not None,
+        len(rule_receipt.get("items") or []),
+        rule_receipt.get("total") is not None,
+        parsed.get("date") is not None,
+    )
+    logger.info(
+        "[receipt:%s] ocr_chars=%d model_ocr_chars=%d compacted=%s",
+        request_id,
+        len(full_ocr_text),
+        len(model_ocr_text),
+        model_ocr_text != full_ocr_text,
+    )
+
+
+def _build_receipt_extraction(
+    parsed: dict,
+    model_ocr_text: str,
+    reference_date: date,
+    request_id: str,
+) -> tuple[dict, str, dict]:
+    """Pilih Soft Prompt Nota atau fallback rule-based.
+
+    Return ``(data_respons, nama_metode, hasil_validasi)``.
+    """
+    if not config.RECEIPT_LLM_ENABLED:
+        validation = fallback_validation(
+            parsed,
+            "Soft Prompt Nota dinonaktifkan melalui konfigurasi server.",
+        )
+        return (
+            _fallback_receipt_response_data(parsed, validation),
+            "rule_based_disabled",
+            validation,
+        )
+
+    try:
+        semantic_result = extract_receipt_with_llama(
+            model_ocr_text,
+            reference_date,
+            parsed,
+        )
+    except ReceiptInferenceError as exc:
+        if not config.RECEIPT_RULE_FALLBACK_ENABLED:
+            logger.error(
+                "[receipt:%s] Soft Prompt Nota tidak tersedia: %s",
+                request_id,
+                exc,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Soft Prompt Nota belum tersedia atau menghasilkan output "
+                    "yang tidak valid."
+                ),
+            ) from None
+        validation = fallback_validation(
+            parsed,
+            f"Fallback rule-based digunakan: {exc}",
+        )
+        logger.warning(
+            "[receipt:%s] extraction_method=rule_based_fallback reason=%s",
+            request_id,
+            exc,
+        )
+        return (
+            _fallback_receipt_response_data(parsed, validation),
+            "rule_based_fallback",
+            validation,
+        )
+
+    semantic_data = semantic_result["data"]
+    validation = validate_receipt_semantics(
+        semantic_data,
+        parsed,
+        parsed["ocr_text"],
+    )
+    logger.debug(
+        "[receipt:%s] llama_raw_output=%r",
+        request_id,
+        semantic_result.get("raw_output"),
+    )
+    return (
+        _receipt_response_data(semantic_data, validation),
+        "llama_soft_prompt_receipt",
+        validation,
+    )
 
 
 @app.post("/extract/receipt", name="extract.receipt")
@@ -995,115 +1165,30 @@ async def extract_receipt_endpoint(
             expected_format,
         )
         parsed = await run_in_threadpool(extract_receipt, temp_path)
-        full_ocr_text = str(parsed.get("ocr_text") or "")
-        compact_ocr_text = str(parsed.get("ocr_model_text") or full_ocr_text)
-        model_ocr_text = (
-            compact_ocr_text
-            if config.RECEIPT_OCR_COMPACT_FOR_MODEL
-            else full_ocr_text
+        model_ocr_text, full_ocr_text = _audit_receipt_ocr(
+            request,
+            audit_input,
+            parsed,
         )
-        parsed["ocr_model_text"] = model_ocr_text
-        ocr_text, ocr_text_truncated = _limited_audit_text(full_ocr_text)
-        audit_model_text, audit_model_text_truncated = _limited_audit_text(
-            model_ocr_text
-        )
-        audit_input.update(
-            ocr_text=ocr_text,
-            ocr_text_truncated=ocr_text_truncated,
-            ocr_model_text=audit_model_text,
-            ocr_model_text_truncated=audit_model_text_truncated,
-            ocr_compacted=model_ocr_text != full_ocr_text,
-        )
-        _merge_audit_metadata(request, method="receipt", input=audit_input)
         if not parsed.get("ocr_text") or parsed.get("receipt") is None:
             raise HTTPException(
                 status_code=422,
                 detail="Tidak ditemukan teks nota yang dapat dibaca.",
             )
-
-        rule_receipt = parsed["receipt"]
-        ocr_diagnostics = parsed.get("ocr_diagnostics") or {}
-        logger.info(
-            "[receipt:%s] ocr_passes=%s selected_pass=%s scores=%s",
+        _log_receipt_diagnostics(
+            parsed,
+            model_ocr_text,
+            full_ocr_text,
             request_id,
-            ocr_diagnostics.get("passes"),
-            ocr_diagnostics.get("selected_pass"),
-            ocr_diagnostics.get("scores"),
-        )
-        logger.info(
-            "[receipt:%s] rule_parser has_merchant=%s items=%d has_total=%s has_date=%s",
-            request_id,
-            rule_receipt.get("merchant_name") is not None,
-            len(rule_receipt.get("items") or []),
-            rule_receipt.get("total") is not None,
-            parsed.get("date") is not None,
-        )
-        logger.info(
-            "[receipt:%s] ocr_chars=%d model_ocr_chars=%d compacted=%s",
-            request_id,
-            len(full_ocr_text),
-            len(model_ocr_text),
-            model_ocr_text != full_ocr_text,
         )
 
-        extraction_method = "llama_soft_prompt_receipt"
-        if config.RECEIPT_LLM_ENABLED:
-            try:
-                semantic_result = await run_in_threadpool(
-                    extract_receipt_with_llama,
-                    model_ocr_text,
-                    effective_reference_date,
-                    parsed,
-                )
-                semantic_data = semantic_result["data"]
-                validation = validate_receipt_semantics(
-                    semantic_data,
-                    parsed,
-                    parsed["ocr_text"],
-                )
-                response_data = _receipt_response_data(
-                    semantic_data,
-                    parsed,
-                    validation,
-                )
-                logger.debug(
-                    "[receipt:%s] llama_raw_output=%r",
-                    request_id,
-                    semantic_result.get("raw_output"),
-                )
-            except ReceiptInferenceError as exc:
-                if not config.RECEIPT_RULE_FALLBACK_ENABLED:
-                    logger.error(
-                        "[receipt:%s] Soft Prompt Nota tidak tersedia: %s",
-                        request_id,
-                        exc,
-                    )
-                    raise HTTPException(
-                        status_code=503,
-                        detail=(
-                            "Soft Prompt Nota belum tersedia atau menghasilkan output "
-                            "yang tidak valid."
-                        ),
-                    ) from None
-                extraction_method = "rule_based_fallback"
-                validation = fallback_validation(
-                    parsed,
-                    f"Fallback rule-based digunakan: {exc}",
-                )
-                response_data = _fallback_receipt_response_data(parsed, validation)
-                logger.warning(
-                    "[receipt:%s] extraction_method=%s reason=%s",
-                    request_id,
-                    extraction_method,
-                    exc,
-                )
-        else:
-            extraction_method = "rule_based_disabled"
-            validation = fallback_validation(
-                parsed,
-                "Soft Prompt Nota dinonaktifkan melalui konfigurasi server.",
-            )
-            response_data = _fallback_receipt_response_data(parsed, validation)
+        response_data, extraction_method, validation = await run_in_threadpool(
+            _build_receipt_extraction,
+            parsed,
+            model_ocr_text,
+            effective_reference_date,
+            request_id,
+        )
 
         logger.info(
             "[receipt:%s] extraction_method=%s validation=%s warnings=%d",

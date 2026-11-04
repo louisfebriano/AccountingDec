@@ -219,12 +219,12 @@
 
             <div class="tab-panel" id="receipt-panel" role="tabpanel" aria-labelledby="receipt-tab" hidden>
               <form id="receipt-form" class="receipt-capture">
+                <!-- Tanpa atribut capture agar browser menampilkan pilihan kamera atau galeri. -->
                 <input
                   class="visually-hidden"
                   id="receipt-file"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
                 >
                 <label class="receipt-picker" for="receipt-file">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -654,6 +654,6 @@
 
     <datalist id="category-presets"></datalist>
 
-    <script type="module" src="/app.js?v=28"></script>
+    <script type="module" src="/app.js?v=29"></script>
   </body>
 </html>

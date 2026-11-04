@@ -197,6 +197,19 @@ def generate_with_base_model(
 
 
 def extract_transaction(user_input: str, adapter_path: str = None, reference_date=None) -> dict:
+    """Ubah satu kalimat kasual menjadi satu transaksi terstruktur.
+
+    Urutan pengecekan, dari yang paling murah ke yang paling mahal:
+
+    1. Konteks: kalimat harus memuat angka dan kata transaksi/pola harga.
+    2. Arah transaksi: classifier rule-based menentukan income/expense. Nilai
+       ``unknown`` langsung menghentikan pipeline sehingga model tidak dimuat.
+    3. Pemasukan umum tanpa rincian barang diselesaikan tanpa model.
+    4. Prompt dikirim ke Llama + Soft Prompt transaksi.
+    5. Output model dirapikan dan divalidasi oleh ``parse_and_validate``.
+
+    Return ``{"success", "input", "data", "error", "raw_output", "out_of_context"}``.
+    """
     # Validasi konteks dulu SEBELUM panggil model -- hemat komputasi kalau kalimatnya
     # jelas bukan transaksi, dan responnya lebih cepat + jelas alasannya ke user.
     is_valid, reason = validate_transaction_context(user_input)

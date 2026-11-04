@@ -35,6 +35,17 @@ SCALAR_FIELDS = (
 )
 ITEM_FIELDS = ("quantity", "unit", "unit_price", "line_total")
 
+# Field transaksi yang divalidasi untuk fitur foto nota. Evaluasi memakai field
+# ini saja; tidak ada WER/CER dan field nota seperti pajak tidak divalidasi.
+RECEIPT_SIX_FIELDS = (
+    "item_name",
+    "quantity",
+    "unit",
+    "total_price",
+    "date",
+    "transaction_type",
+)
+
 
 def _normalized_name(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).strip()
@@ -139,6 +150,81 @@ def evaluate_receipt_predictions(
     }
 
 
+def receipt_transaction_view(receipt_output: Mapping[str, Any]) -> dict[str, Any]:
+    """Bentuk enam field transaksi dari satu output nota.
+
+    Total dihitung dari rincian harga barang per item; field nota seperti pajak,
+    diskon, dan biaya layanan tidak menjadi bagian validasi.
+    """
+    items = [
+        item
+        for item in (receipt_output.get("items") or [])
+        if isinstance(item, Mapping)
+    ]
+    item_name: Any = None
+    quantity: Any = None
+    unit: Any = None
+    if len(items) == 1:
+        item_name = items[0].get("item_name")
+        quantity = items[0].get("quantity")
+        unit = items[0].get("unit")
+    line_totals = [
+        item.get("line_total")
+        for item in items
+        if isinstance(item.get("line_total"), int)
+    ]
+    total_price = sum(line_totals) if line_totals else receipt_output.get("total")
+    return {
+        "item_name": item_name,
+        "quantity": quantity,
+        "unit": unit,
+        "total_price": total_price,
+        "date": receipt_output.get("date"),
+        "transaction_type": receipt_output.get("transaction_type") or "expense",
+    }
+
+
+def evaluate_receipt_transaction_fields(
+    targets: Sequence[Mapping[str, Any]],
+    predictions: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Evaluasi field transaksi nota tanpa WER/CER dan tanpa field nota lain."""
+    if len(targets) != len(predictions):
+        raise ValueError("Jumlah target dan prediksi receipt harus sama.")
+    valid_json = 0
+    field_correct = {field: 0 for field in RECEIPT_SIX_FIELDS}
+    for target_row, prediction_row in zip(targets, predictions):
+        target = ReceiptExtractionSchema.model_validate(
+            target_row["output"],
+            strict=True,
+        ).model_dump()
+        prediction = _validated_prediction(prediction_row)
+        if prediction is None:
+            continue
+        valid_json += 1
+        target_view = receipt_transaction_view(target)
+        prediction_view = receipt_transaction_view(prediction)
+        for field in RECEIPT_SIX_FIELDS:
+            if prediction_view.get(field) == target_view.get(field):
+                field_correct[field] += 1
+
+    total = len(targets)
+    field_accuracy = {
+        field: _safe_ratio(correct, total)
+        for field, correct in field_correct.items()
+    }
+    return {
+        "examples": total,
+        "json_validity_rate": _safe_ratio(valid_json, total),
+        "field_accuracy": field_accuracy,
+        "field_level_accuracy": _safe_ratio(
+            sum(field_correct.values()),
+            total * len(RECEIPT_SIX_FIELDS),
+        ),
+        "receipt_fields": list(RECEIPT_SIX_FIELDS),
+    }
+
+
 def load_prediction_jsonl(path: str | Path) -> list[dict[str, Any]]:
     source = Path(path)
     if not source.is_file():
@@ -181,6 +267,12 @@ def main() -> None:
     parser.add_argument("--data", default=config.RECEIPT_EVAL_DATA_PATH)
     parser.add_argument("--predictions", default=None)
     parser.add_argument("--output", default="receipt-evaluation-report.json")
+    parser.add_argument(
+        "--fields",
+        choices=("all", "six"),
+        default="all",
+        help="Validasi seluruh field nota (default) atau hanya enam field transaksi.",
+    )
     args = parser.parse_args()
 
     targets = load_receipt_jsonl(args.data)
@@ -189,7 +281,10 @@ def main() -> None:
         if args.predictions
         else collect_model_predictions(targets)
     )
-    report = evaluate_receipt_predictions(targets, predictions)
+    if args.fields == "six":
+        report = evaluate_receipt_transaction_fields(targets, predictions)
+    else:
+        report = evaluate_receipt_predictions(targets, predictions)
     Path(args.output).write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
